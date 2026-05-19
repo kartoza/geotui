@@ -1,0 +1,67 @@
+# GeoTUI Translation Template
+# Copyright (C) 2026 Kartoza (Pty) Ltd
+# This file is distributed under the MIT license.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: geotui 0.1.0\n"
+"Report-Msgid-Bugs-To: info@kartoza.com\n"
+"POT-Creation-Date: 2026-05-19 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: src/geotui/app.py
+msgid "Quit"
+msgstr ""
+
+msgid "Switch Pane"
+msgstr ""
+
+msgid "Help"
+msgstr ""
+
+msgid "Menu"
+msgstr ""
+
+msgid "Copy"
+msgstr ""
+
+msgid "Move"
+msgstr ""
+
+msgid "MkDir"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Language"
+msgstr ""
+
+msgid "Ready"
+msgstr ""
+
+msgid "Help - Press F1 for assistance"
+msgstr ""
+
+msgid "GeoTUI Help"
+msgstr ""
+
+msgid "Create Directory"
+msgstr ""
+
+msgid "Left"
+msgstr ""
+
+msgid "Right"
+msgstr ""
+
+msgid "Files"
+msgstr ""

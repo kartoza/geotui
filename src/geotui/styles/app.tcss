@@ -1,0 +1,97 @@
+/* GeoTUI - Kartoza Branded Theme */
+/* Color Reference:
+   highlight1: #DF9E2F (yellow/orange)
+   highlight2: #569FC6 (blue)
+   highlight3: #8A8B8B (grey)
+   highlight4: #06969A (teal)
+   alert:      #CC0403 (red)
+*/
+
+Screen {
+    background: $background;
+}
+
+Header {
+    background: #0f3460;
+    color: #DF9E2F;
+    text-style: bold;
+}
+
+Footer {
+    background: #16213e;
+    color: #569FC6;
+}
+
+Footer > .footer--key {
+    background: #06969A;
+    color: #1a1a2e;
+}
+
+Footer > .footer--description {
+    color: #8A8B8B;
+}
+
+DualPane {
+    padding: 0;
+}
+
+FilePane {
+    border: round #569FC6;
+    background: #1a1a2e;
+}
+
+FilePane.active {
+    border: round #DF9E2F;
+}
+
+FilePane .pane-header {
+    background: #0f3460;
+    color: #569FC6;
+    text-style: bold;
+    text-align: center;
+}
+
+FilePane .pane-header.active {
+    background: #DF9E2F;
+    color: #1a1a2e;
+}
+
+FilePane DirectoryTree {
+    background: #1a1a2e;
+    color: #8A8B8B;
+    scrollbar-color: #569FC6;
+    scrollbar-background: #16213e;
+}
+
+FilePane DirectoryTree > .directory-tree--folder {
+    color: #569FC6;
+    text-style: bold;
+}
+
+FilePane DirectoryTree > .directory-tree--file {
+    color: #8A8B8B;
+}
+
+FilePane DirectoryTree > .directory-tree--cursor {
+    background: #06969A;
+    color: #1a1a2e;
+    text-style: bold;
+}
+
+FilePane .pane-footer {
+    background: #16213e;
+    color: #8A8B8B;
+}
+
+StatusBar {
+    background: #0f3460;
+    color: #DF9E2F;
+}
+
+StatusBar .status-left {
+    color: #06969A;
+}
+
+StatusBar .status-right {
+    color: #8A8B8B;
+}

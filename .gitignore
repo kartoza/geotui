@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Docs
+docs/site/
+site/
+
+# Nix
+result
+result-*
+
+# Project
+PROMPT.log
+claude.sh
+claude.out
+
+# OS
+.DS_Store
+Thumbs.db
+
+# i18n compiled
+*.mo
+
+# Environment
+.env
+.env.local

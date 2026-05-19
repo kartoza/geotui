@@ -1,0 +1,60 @@
+# Spanish translation for GeoTUI
+# Copyright (C) 2026 Kartoza (Pty) Ltd
+msgid ""
+msgstr ""
+"Project-Id-Version: geotui 0.1.0\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Quit"
+msgstr "Salir"
+
+msgid "Switch Pane"
+msgstr "Cambiar Panel"
+
+msgid "Help"
+msgstr "Ayuda"
+
+msgid "Menu"
+msgstr "Menu"
+
+msgid "Copy"
+msgstr "Copiar"
+
+msgid "Move"
+msgstr "Mover"
+
+msgid "MkDir"
+msgstr "CrearDir"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Settings"
+msgstr "Configuracion"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Ready"
+msgstr "Listo"
+
+msgid "Help - Press F1 for assistance"
+msgstr "Ayuda - Presione F1 para asistencia"
+
+msgid "GeoTUI Help"
+msgstr "Ayuda GeoTUI"
+
+msgid "Create Directory"
+msgstr "Crear Directorio"
+
+msgid "Left"
+msgstr "Izquierda"
+
+msgid "Right"
+msgstr "Derecha"
+
+msgid "Files"
+msgstr "Archivos"

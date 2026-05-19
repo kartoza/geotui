@@ -1,0 +1,21 @@
+/* Kartoza Brand Colors */
+:root {
+  --md-primary-fg-color: #569FC6;
+  --md-primary-fg-color--light: #569FC6;
+  --md-primary-fg-color--dark: #0f3460;
+  --md-accent-fg-color: #DF9E2F;
+  --md-accent-fg-color--transparent: #DF9E2F1a;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0f3460;
+  --md-accent-fg-color: #DF9E2F;
+}
+
+.md-footer {
+  background-color: #16213e;
+}
+
+.md-header {
+  background-color: #0f3460;
+}

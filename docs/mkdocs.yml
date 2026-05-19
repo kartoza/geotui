@@ -1,0 +1,79 @@
+site_name: GeoTUI
+site_description: A beautiful Midnight Commander-style TUI for geospatial server management
+site_author: Kartoza (Pty) Ltd
+site_url: https://kartoza.github.io/geotui
+repo_url: https://github.com/kartoza/geotui
+repo_name: kartoza/geotui
+copyright: Copyright &copy; 2026 Kartoza (Pty) Ltd
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+  logo: assets/otter-logo.png
+  favicon: assets/favicon.ico
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Navigation: user-guide/navigation.md
+      - Configuration: user-guide/configuration.md
+  - Administrator Guide:
+      - Installation: admin-guide/installation.md
+      - Deployment: admin-guide/deployment.md
+      - Security: admin-guide/security.md
+  - Developer Guide:
+      - Contributing: developer-guide/contributing.md
+      - Architecture: developer-guide/architecture.md
+      - Testing: developer-guide/testing.md
+      - Internationalization: developer-guide/i18n.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kartoza/geotui
+    - icon: fontawesome/solid/globe
+      link: https://kartoza.com
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - attr_list
+  - md_in_html

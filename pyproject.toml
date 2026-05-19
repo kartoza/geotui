@@ -1,0 +1,117 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "geotui"
+version = "0.1.0"
+description = "A beautiful Midnight Commander-style TUI for geospatial server management"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Kartoza (Pty) Ltd", email = "info@kartoza.com" },
+]
+keywords = ["geoserver", "tui", "geospatial", "terminal", "midnight-commander"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "textual>=1.0.0",
+    "rich>=13.0.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "keyring>=25.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-bdd>=7.0.0",
+    "pytest-cov>=5.0.0",
+    "textual-dev>=1.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.0.0",
+    "pre-commit>=4.0.0",
+    "bandit>=1.7.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.27.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.2.0",
+]
+i18n = [
+    "babel>=2.16.0",
+]
+
+[project.scripts]
+geotui = "geotui.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/kartoza/geotui"
+Documentation = "https://kartoza.github.io/geotui"
+Repository = "https://github.com/kartoza/geotui"
+Issues = "https://github.com/kartoza/geotui/issues"
+Funding = "https://github.com/sponsors/kartoza"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "S",    # bandit security
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez
+    "T20",  # flake8-print
+    "RUF",  # ruff-specific
+]
+ignore = ["S101"]  # Allow assert in tests
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "T20"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=geotui --cov-report=term-missing --cov-report=html"
+
+[tool.coverage.run]
+source = ["src/geotui"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/geotui"]
