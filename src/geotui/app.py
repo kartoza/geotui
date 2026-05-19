@@ -5,6 +5,7 @@ from textual.binding import Binding
 from textual.design import ColorSystem
 from textual.widgets import Footer, Header
 
+from geotui.config import ConfigManager
 from geotui.i18n import _
 from geotui.theme import KARTOZA_DARK, KARTOZA_LIGHT
 from geotui.widgets.dual_pane import DualPane
@@ -12,11 +13,20 @@ from geotui.widgets.status_bar import StatusBar
 
 
 class GeoTUIApp(App[None]):
-    """GeoTUI - Midnight Commander-style geospatial server manager."""
+    """GeoTUI - Midnight Commander-style GeoServer manager."""
 
     TITLE = "GeoTUI"
-    SUB_TITLE = "Geospatial Server Manager"
+    SUB_TITLE = "GeoServer Manager"
     CSS_PATH = "styles/app.tcss"
+
+    def __init__(self, config_manager: ConfigManager | None = None) -> None:
+        """Initialize the application.
+
+        Args:
+            config_manager: Optional config manager override (useful for testing).
+        """
+        super().__init__()
+        self.config_manager = config_manager or ConfigManager()
 
     BINDINGS = [
         Binding("q", "quit", _("Quit")),
@@ -79,8 +89,10 @@ class GeoTUIApp(App[None]):
         self.notify(_("Delete"), title=_("GeoTUI"))
 
     def action_settings(self) -> None:
-        """Show settings."""
-        self.notify(_("Settings"), title=_("GeoTUI"))
+        """Show settings screen."""
+        from geotui.screens.settings import SettingsScreen
+
+        self.push_screen(SettingsScreen(self.config_manager))
 
     def action_toggle_language(self) -> None:
         """Cycle through available languages."""

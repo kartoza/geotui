@@ -1,5 +1,5 @@
 Feature: Dual Pane Navigation
-  As a geospatial server administrator
+  As a GeoServer administrator
   I want a Midnight Commander-style dual pane interface
   So that I can efficiently manage files and resources
 

@@ -3,7 +3,11 @@
     "allow": [
       "Bash(nix develop:*)",
       "Bash(nix:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

@@ -6,7 +6,7 @@
 |---------|---------|---------|
 | **textual** | >=1.0.0 | TUI framework providing widgets, layout, CSS styling, and event handling |
 | **rich** | >=13.0.0 | Rich text rendering, used by Textual for terminal output |
-| **httpx** | >=0.27.0 | Async HTTP client for communicating with geospatial servers |
+| **httpx** | >=0.27.0 | Async HTTP client for communicating with GeoServer REST API |
 | **pydantic** | >=2.0.0 | Data validation and settings management |
 | **pydantic-settings** | >=2.0.0 | Configuration management with environment variable support |
 | **keyring** | >=25.0.0 | Secure credential storage using system keyring |

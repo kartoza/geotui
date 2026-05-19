@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "geotui"
-version = "0.1.0"
-description = "A beautiful Midnight Commander-style TUI for geospatial server management"
+version = "0.2.0"
+description = "A beautiful Midnight Commander-style TUI for GeoServer management"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -101,7 +101,7 @@ addopts = "--cov=geotui --cov-report=term-missing --cov-report=html"
 
 [tool.coverage.run]
 source = ["src/geotui"]
-omit = ["tests/*"]
+omit = ["tests/*", "src/geotui/__main__.py"]
 
 [tool.coverage.report]
 fail_under = 80

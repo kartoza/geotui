@@ -1,5 +1,5 @@
 site_name: GeoTUI
-site_description: A beautiful Midnight Commander-style TUI for geospatial server management
+site_description: A beautiful Midnight Commander-style TUI for GeoServer management
 site_author: Kartoza (Pty) Ltd
 site_url: https://kartoza.github.io/geotui
 repo_url: https://github.com/kartoza/geotui

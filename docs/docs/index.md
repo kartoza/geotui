@@ -3,7 +3,7 @@
 <div align="center">
 <img src="assets/otter-logo.png" alt="GeoTUI Otter Mascot" width="200">
 
-**A beautiful Midnight Commander-style TUI for geospatial server management**
+**A beautiful Midnight Commander-style TUI for GeoServer management**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -12,7 +12,7 @@
 
 ## Overview
 
-GeoTUI is a terminal user interface (TUI) application designed for managing geospatial servers with the familiar dual-pane layout of Midnight Commander. Built with Python using Textual and Rich, it runs on Windows (PowerShell), Linux, and macOS.
+GeoTUI is a terminal user interface (TUI) application designed for managing GeoServer instances with the familiar dual-pane layout of Midnight Commander. Built with Python using Textual and Rich, it runs on Windows (PowerShell), Linux, and macOS.
 
 ## Features
 

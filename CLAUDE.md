@@ -1,7 +1,7 @@
 # GeoTUI - Project Instructions
 
 ## Project Overview
-GeoTUI is a Midnight Commander-style TUI for geospatial server management, built with Python/Textual.
+GeoTUI is a Midnight Commander-style TUI for GeoServer management, built with Python/Textual.
 
 ## Key Paths
 - Source: `src/geotui/`

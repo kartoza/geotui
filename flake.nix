@@ -1,5 +1,5 @@
 {
-  description = "GeoTUI - Midnight Commander-style TUI for geospatial server management";
+  description = "GeoTUI - Midnight Commander-style TUI for GeoServer management";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

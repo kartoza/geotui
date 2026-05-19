@@ -5,12 +5,12 @@
 ```
     ,,,
    (o o)   GeoTUI
-   ( _ )   Geospatial Server Manager
+   ( _ )   GeoServer Manager
     |||
    / | \   An otter-powered TUI
 ```
 
-**A beautiful Midnight Commander-style TUI for geospatial server management**
+**A beautiful Midnight Commander-style TUI for GeoServer management**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -21,7 +21,7 @@
 
 ## Overview
 
-GeoTUI is a terminal user interface (TUI) application for managing geospatial servers. Built with [Textual](https://textual.textualize.io/) and [Rich](https://rich.readthedocs.io/), it provides a familiar Midnight Commander-style dual-pane interface that runs everywhere: Windows (PowerShell), Linux, and macOS.
+GeoTUI is a terminal user interface (TUI) application for managing GeoServer instances. Built with [Textual](https://textual.textualize.io/) and [Rich](https://rich.readthedocs.io/), it provides a familiar Midnight Commander-style dual-pane interface that runs everywhere: Windows (PowerShell), Linux, and macOS.
 
 ## Features
 

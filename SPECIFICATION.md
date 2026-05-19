@@ -4,7 +4,7 @@
 
 ## 1. Overview
 
-GeoTUI is a Midnight Commander-style terminal user interface (TUI) application for managing geospatial servers. It provides a dual-pane file browser interface built with Python using the Textual and Rich frameworks.
+GeoTUI is a Midnight Commander-style terminal user interface (TUI) application for managing GeoServer instances. It provides a dual-pane interface built with Python using the Textual and Rich frameworks.
 
 ## 2. Architecture
 
@@ -52,7 +52,7 @@ graph TB
 ## 3. User Stories
 
 ### US-001: Dual Pane Navigation
-**As a** geospatial server administrator
+**As a** GeoServer administrator
 **I want** a Midnight Commander-style dual pane interface
 **So that** I can efficiently browse and manage files and resources side by side
 
@@ -150,8 +150,19 @@ graph TB
 - Automated release with package building
 - Documentation deployed to GitHub Pages
 
+### FR-006: Connection Management
+- Users can manage multiple GeoServer connection instances
+- Each connection has: Name, URL, Username, Password
+- Connections listed by name in settings screen (left panel)
+- Selecting a connection shows its details (right panel, view mode)
+- Inline edit form (no popups) for add/edit operations
+- Connection testing via GeoServer REST API (/rest/about/version.json)
+- Configuration persisted as JSON in XDG config directory
+- Atomic file writes prevent corruption
+
 ## 6. Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.2.0 | 2026-05-19 | Connection management, settings screen, GeoServer API client |
 | 0.1.0 | 2026-05-19 | Initial release - dual pane MC-style interface |
