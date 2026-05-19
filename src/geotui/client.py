@@ -78,9 +78,7 @@ class GeoServerClient:
             Parsed JSON response or None on failure.
         """
         try:
-            async with httpx.AsyncClient(
-                timeout=self._timeout, verify=True
-            ) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=True) as client:
                 response = await client.get(
                     f"{self._base_url}{path}",
                     auth=self._auth,

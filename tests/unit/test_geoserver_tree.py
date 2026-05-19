@@ -20,9 +20,7 @@ class TestGeoServerTree:
     """Test suite for GeoServerTree widget."""
 
     @pytest.mark.asyncio
-    async def test_app_has_geoserver_tree(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_app_has_geoserver_tree(self, config_manager: ConfigManager) -> None:
         """Test that the app contains a GeoServer tree in the right pane."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -30,9 +28,7 @@ class TestGeoServerTree:
             assert tree is not None
 
     @pytest.mark.asyncio
-    async def test_no_connection_message(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_no_connection_message(self, config_manager: ConfigManager) -> None:
         """Test that empty state shows no connection message."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -82,9 +78,7 @@ class TestGeoServerTree:
             assert no_conn.display is True
 
     @pytest.mark.asyncio
-    async def test_tree_toggle_active(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_tree_toggle_active(self, config_manager: ConfigManager) -> None:
         """Test that Tab switches active state to GeoServer tree."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -144,9 +138,7 @@ class TestGeoServerTree:
                         name="postgis_store",
                         resource_type="datastore",
                         children=[
-                            GeoServerResource(
-                                name="buildings", resource_type="layer"
-                            ),
+                            GeoServerResource(name="buildings", resource_type="layer"),
                             GeoServerResource(name="roads", resource_type="layer"),
                         ],
                     ),
@@ -180,9 +172,7 @@ class TestGeoServerTree:
             assert len(tree.root.children) == 2
 
     @pytest.mark.asyncio
-    async def test_refresh_tree(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_refresh_tree(self, config_manager: ConfigManager) -> None:
         """Test refresh_tree with no connection is a no-op."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:

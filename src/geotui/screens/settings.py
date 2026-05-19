@@ -237,9 +237,7 @@ class SettingsScreen(Screen[None]):
                     yield Label(_("Password"), classes="field-label")
                     yield Static("", id="view-password", classes="field-value-password")
                     with Horizontal(id="form-buttons"):
-                        yield Button(
-                            _("Edit"), id="btn-edit", classes="btn-primary"
-                        )
+                        yield Button(_("Edit"), id="btn-edit", classes="btn-primary")
                         yield Button(
                             _("Connect"), id="btn-connect", classes="btn-success"
                         )
@@ -258,9 +256,7 @@ class SettingsScreen(Screen[None]):
                         placeholder=_("Password"), id="input-password", password=True
                     )
                     with Horizontal(id="form-buttons"):
-                        yield Button(
-                            _("Save"), id="btn-save", classes="btn-success"
-                        )
+                        yield Button(_("Save"), id="btn-save", classes="btn-success")
                         yield Button(
                             _("Cancel"), id="btn-cancel", classes="btn-default"
                         )

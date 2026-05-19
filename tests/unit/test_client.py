@@ -12,9 +12,7 @@ class TestConnectionResult:
 
     def test_success_result(self) -> None:
         """Test successful connection result."""
-        result = ConnectionResult(
-            success=True, message="Connected", version="2.24.0"
-        )
+        result = ConnectionResult(success=True, message="Connected", version="2.24.0")
         assert result.success is True
         assert result.version == "2.24.0"
 

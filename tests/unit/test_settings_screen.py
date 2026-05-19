@@ -43,9 +43,7 @@ class TestSettingsScreen:
     """Test suite for SettingsScreen."""
 
     @pytest.mark.asyncio
-    async def test_settings_screen_opens(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_settings_screen_opens(self, config_manager: ConfigManager) -> None:
         """Test that the settings screen can be opened."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -80,9 +78,7 @@ class TestSettingsScreen:
             assert len(list_view.children) == 2
 
     @pytest.mark.asyncio
-    async def test_escape_returns_to_main(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_escape_returns_to_main(self, config_manager: ConfigManager) -> None:
         """Test that Escape returns to the main screen."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -94,9 +90,7 @@ class TestSettingsScreen:
             assert not isinstance(app.screen, SettingsScreen)
 
     @pytest.mark.asyncio
-    async def test_add_shows_edit_form(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_add_shows_edit_form(self, config_manager: ConfigManager) -> None:
         """Test that Add action shows the edit form."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -127,9 +121,7 @@ class TestSettingsScreen:
             assert screen.editing is False
 
     @pytest.mark.asyncio
-    async def test_save_new_connection(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_save_new_connection(self, config_manager: ConfigManager) -> None:
         """Test saving a new connection via the form."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -149,9 +141,7 @@ class TestSettingsScreen:
             assert config_manager.config.connections[0].name == "New Server"
 
     @pytest.mark.asyncio
-    async def test_save_requires_name(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_save_requires_name(self, config_manager: ConfigManager) -> None:
         """Test that saving without a name is rejected."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -167,9 +157,7 @@ class TestSettingsScreen:
             assert len(config_manager.config.connections) == 0
 
     @pytest.mark.asyncio
-    async def test_save_requires_url(
-        self, config_manager: ConfigManager
-    ) -> None:
+    async def test_save_requires_url(self, config_manager: ConfigManager) -> None:
         """Test that saving without a URL is rejected."""
         app = GeoTUIApp(config_manager=config_manager)
         async with app.run_test() as pilot:
@@ -185,9 +173,7 @@ class TestSettingsScreen:
             assert len(config_manager.config.connections) == 0
 
     @pytest.mark.asyncio
-    async def test_select_shows_detail(
-        self, populated_config: ConfigManager
-    ) -> None:
+    async def test_select_shows_detail(self, populated_config: ConfigManager) -> None:
         """Test that selecting a connection shows its details."""
         app = GeoTUIApp(config_manager=populated_config)
         conn = populated_config.config.connections[0]
@@ -203,9 +189,7 @@ class TestSettingsScreen:
             assert view_mode.display is True
 
     @pytest.mark.asyncio
-    async def test_delete_connection(
-        self, populated_config: ConfigManager
-    ) -> None:
+    async def test_delete_connection(self, populated_config: ConfigManager) -> None:
         """Test deleting a connection."""
         app = GeoTUIApp(config_manager=populated_config)
         conn_id = populated_config.config.connections[0].id
