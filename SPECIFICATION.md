@@ -160,9 +160,19 @@ graph TB
 - Configuration persisted as JSON in XDG config directory
 - Atomic file writes prevent corruption
 
+### FR-007: GeoServer Resource Tree
+- Right pane displays GeoServer resource hierarchy from active connection
+- Tree shows: Workspaces > Stores (data/coverage/WMS) > Layers/Coverages
+- Workspaces shown in blue, stores color-coded by type (teal=vector, orange=raster, blue=WMS)
+- Tree loads asynchronously via worker thread
+- Active connection restored on app startup
+- Empty state shows "No connection active" message
+- Refresh capability for reloading tree data
+
 ## 6. Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.3.0 | 2026-05-19 | GeoServer resource tree in right pane, full REST API client |
 | 0.2.0 | 2026-05-19 | Connection management, settings screen, GeoServer API client |
 | 0.1.0 | 2026-05-19 | Initial release - dual pane MC-style interface |

@@ -388,7 +388,10 @@ class SettingsScreen(Screen[None]):
             self._do_test_connection(conn)
 
     async def _do_test_connection(self, conn: Connection) -> None:
-        """Run the async connection test.
+        """Test and activate the connection.
+
+        Tests credentials via GeoServer REST API. On success, sets
+        this connection as active and updates the main dual pane.
 
         Args:
             conn: Connection to test.
@@ -399,6 +402,18 @@ class SettingsScreen(Screen[None]):
         result = await test_connection(conn)
         if result.success:
             self.notify(result.message, severity="information")
+            # Mark this connection as active, deactivate others
+            for c in self._config.config.connections:
+                c.is_active = c.id == conn.id
+            self._config.save()
+            # Update the dual pane with the active connection
+            from geotui.widgets.dual_pane import DualPane
+
+            try:
+                dual_pane = self.app.query_one(DualPane)
+                dual_pane.set_connection(conn)
+            except Exception:
+                pass
         else:
             self.notify(result.message, severity="error")
 
