@@ -5,8 +5,8 @@ from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.reactive import reactive
-from textual.widgets import DirectoryTree, Label, Static
 from textual.widget import Widget
+from textual.widgets import DirectoryTree, Label, Static
 
 
 class FilePane(Widget):

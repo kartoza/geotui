@@ -172,7 +172,8 @@ class GeoServerTree(Widget):
             for store in ws.children:
                 color = self._store_color(store.resource_type)
                 store_node = ws_node.add(
-                    f"[{color}]{store.name}[/] [{self._store_label(store.resource_type)}]",
+                    f"[{color}]{store.name}[/]"
+                    f" [{self._store_label(store.resource_type)}]",
                     data=store,
                     expand=False,
                 )

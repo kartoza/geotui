@@ -89,7 +89,12 @@ select = [
     "T20",  # flake8-print
     "RUF",  # ruff-specific
 ]
-ignore = ["S101"]  # Allow assert in tests
+ignore = [
+    "S101",   # Allow assert in tests
+    "RUF012", # Mutable class attrs are standard Textual pattern (BINDINGS, CSS, etc.)
+    "A002",   # `id` parameter shadowing is standard Textual pattern
+    "S110",   # try-except-pass is used for graceful degradation in UI widgets
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106", "T20"]

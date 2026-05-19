@@ -33,7 +33,8 @@ class GeoServerResource:
 
     Attributes:
         name: Resource name.
-        resource_type: Type of resource (workspace, datastore, coveragestore, wmsstore, layer, coverage, wms_layer).
+        resource_type: Type of resource (workspace, datastore,
+            coveragestore, wmsstore, layer, coverage, wms_layer).
         children: Child resources.
         href: REST API href for this resource.
     """
