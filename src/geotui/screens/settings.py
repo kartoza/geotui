@@ -385,7 +385,7 @@ class SettingsScreen(Screen[None]):
             return
         conn = self._config.get_connection(self.selected_id)
         if conn:
-            self._do_test_connection(conn)
+            self.run_worker(self._do_test_connection(conn), exit_on_error=False)
 
     async def _do_test_connection(self, conn: Connection) -> None:
         """Test and activate the connection.
@@ -450,9 +450,9 @@ class SettingsScreen(Screen[None]):
             self.notify(f"{name} added", severity="information")
 
         self._refresh_list()
-        conn = self._config.get_connection(self.selected_id)
-        if conn:
-            self._show_connection_detail(conn)
+        saved_conn = self._config.get_connection(self.selected_id)
+        if saved_conn:
+            self._show_connection_detail(saved_conn)
 
     def _cancel_edit(self) -> None:
         """Cancel editing and return to view or empty mode."""

@@ -5,6 +5,7 @@ resources (workspaces, stores, layers) via the REST API.
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -66,7 +67,7 @@ class GeoServerClient:
         self._timeout = timeout
         self._auth = httpx.BasicAuth(conn.username, conn.password)
 
-    async def _get(self, path: str) -> dict | list | None:
+    async def _get(self, path: str) -> Any:
         """Make an authenticated GET request to the REST API.
 
         Args:
