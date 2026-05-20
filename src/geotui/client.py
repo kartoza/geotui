@@ -585,6 +585,135 @@ class GeoServerClient:
                 workspace, name, store_type.gs_type, params
             )
 
+    # ── Publish helper methods ─────────────────────────────
+
+    async def _put(self, path: str, data: bytes, content_type: str) -> int:
+        """Make an authenticated PUT request with binary data.
+
+        Args:
+            path: API path relative to base URL.
+            data: Raw bytes to send as the request body.
+            content_type: MIME type for the Content-Type header.
+
+        Returns:
+            HTTP status code, or 0 on a request error.
+        """
+        client = await self._ensure_client()
+        try:
+            response = await client.put(
+                f"{self._base_url}{path}",
+                content=data,
+                auth=self._auth,
+                headers={"Content-Type": content_type},
+            )
+            return response.status_code
+        except httpx.RequestError:
+            return 0
+
+    async def _put_json(self, path: str, json_data: dict) -> bool:
+        """Make an authenticated PUT request with a JSON body.
+
+        Args:
+            path: API path relative to base URL.
+            json_data: JSON-serialisable body.
+
+        Returns:
+            True if the server responded with 200 OK.
+        """
+        client = await self._ensure_client()
+        try:
+            response = await client.put(
+                f"{self._base_url}{path}",
+                json=json_data,
+                auth=self._auth,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+            return response.status_code == 200
+        except httpx.RequestError:
+            return False
+
+    async def layer_exists(self, workspace: str, layer_name: str) -> bool:
+        """Check whether a layer already exists in GeoServer.
+
+        Args:
+            workspace: Workspace name.
+            layer_name: Layer name (without workspace prefix).
+
+        Returns:
+            True if the layer exists.
+        """
+        data = await self._get(f"/rest/layers/{workspace}:{layer_name}.json")
+        return data is not None
+
+    async def get_datastore_type(self, workspace: str, store: str) -> str | None:
+        """Return the GeoServer type string for a datastore.
+
+        Args:
+            workspace: Workspace name.
+            store: Datastore name.
+
+        Returns:
+            Type string (e.g. ``"Shapefile"``) or ``None`` if not found.
+        """
+        data = await self._get(f"/rest/workspaces/{workspace}/datastores/{store}.json")
+        if not data:
+            return None
+        return data.get("dataStore", {}).get("type")
+
+    async def upload_shapefile(
+        self,
+        workspace: str,
+        store: str,
+        zip_data: bytes,
+        update: bool,
+    ) -> bool:
+        """Upload a zipped shapefile to a GeoServer datastore.
+
+        Sends the ZIP archive to the GeoServer file-upload endpoint using
+        the ``file.shp`` method.  When *update* is ``True`` the
+        ``update=overwrite`` query parameter is appended so that an existing
+        store/layer is replaced rather than causing a conflict.
+
+        Args:
+            workspace: Target workspace name.
+            store: Target datastore name.
+            zip_data: Raw bytes of a ZIP archive containing the shapefile.
+            update: If ``True``, overwrite an existing store/layer.
+
+        Returns:
+            True if the upload succeeded (HTTP 201 Created or 200 OK).
+        """
+        path = f"/rest/workspaces/{workspace}/datastores/{store}/file.shp"
+        if update:
+            path += "?update=overwrite"
+        status = await self._put(path, zip_data, "application/zip")
+        return status in (200, 201)
+
+    async def assign_style(
+        self, workspace: str, layer_name: str, style_name: str
+    ) -> bool:
+        """Set the default style for a published layer.
+
+        Args:
+            workspace: Workspace that owns the layer.
+            layer_name: Name of the layer (without workspace prefix).
+            style_name: Name of the style to assign.
+
+        Returns:
+            True if GeoServer accepted the update (HTTP 200 OK).
+        """
+        return await self._put_json(
+            f"/rest/layers/{workspace}:{layer_name}.json",
+            {
+                "layer": {
+                    "defaultStyle": {"name": style_name},
+                }
+            },
+        )
+
 
 async def test_connection(conn: Connection, timeout: float = 10.0) -> ConnectionResult:
     """Test a GeoServer connection by querying the REST API.
