@@ -174,7 +174,7 @@ _COL_WIDTHS = {
 _TABLE_COLS = list(_COL_WIDTHS.keys())
 
 
-class _PublishPDF(FPDF):
+class _PublishPDF(FPDF):  # type: ignore[misc]
     """Custom FPDF subclass that renders the branded publish report."""
 
     def __init__(self, report: PublishReport) -> None:

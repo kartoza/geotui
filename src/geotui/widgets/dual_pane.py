@@ -86,12 +86,12 @@ class DualPane(Widget):
         # Check reactive state or if any child of the right pane has focus
         right_active = self.active_pane == "right"
         if not right_active and self.app.focused is not None:
-            widget = self.app.focused
-            while widget is not None:
-                if widget is right:
+            current = self.app.focused
+            while current is not None:
+                if current is right:
                     right_active = True
                     break
-                widget = widget.parent
+                current = current.parent  # type: ignore[assignment]
 
         if right_active and right.connection is not None:
             return "geoserver"

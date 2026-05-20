@@ -6,6 +6,7 @@ for creating workspaces and stores via the F2 context menu.
 """
 
 from pathlib import Path
+from typing import Any
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -171,7 +172,7 @@ class GeoServerTree(Widget):
     is_active: reactive[bool] = reactive(False)
     loading: reactive[bool] = reactive(False)
 
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize the tree widget."""
         super().__init__(**kwargs)
         self._current_action = ""
@@ -421,6 +422,7 @@ class GeoServerTree(Widget):
                 status = self.query_one("#tree-status", Static)
                 status.update(f"Publishing {current}/{total}: {name}")
 
+        assert self.connection is not None
         report = await run_publish(self.connection, config, progress)
 
         if self.is_mounted:
@@ -443,6 +445,7 @@ class GeoServerTree(Widget):
 
     async def _create_workspace(self, name: str) -> None:
         """Create a workspace via the API."""
+        assert self.connection is not None
         async with GeoServerClient(self.connection) as client:
             ok = await client.create_workspace(name)
         if self.is_mounted:
@@ -460,6 +463,7 @@ class GeoServerTree(Widget):
         self, store_type: StoreType, field_values: dict[str, str]
     ) -> None:
         """Create a store via the API using the type registry."""
+        assert self.connection is not None
         ws = self._current_workspace
         name = field_values.get("name", "")
         async with GeoServerClient(self.connection) as client:

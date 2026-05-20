@@ -281,7 +281,7 @@ class GeoServerClient:
             pass
         return None
 
-    async def _post(self, path: str, json_data: dict) -> bool:
+    async def _post(self, path: str, json_data: dict[str, Any]) -> bool:
         """Make an authenticated POST request.
 
         Args:
@@ -610,7 +610,7 @@ class GeoServerClient:
         except httpx.RequestError:
             return 0
 
-    async def _put_json(self, path: str, json_data: dict) -> bool:
+    async def _put_json(self, path: str, json_data: dict[str, Any]) -> bool:
         """Make an authenticated PUT request with a JSON body.
 
         Args:
@@ -661,7 +661,8 @@ class GeoServerClient:
         data = await self._get(f"/rest/workspaces/{workspace}/datastores/{store}.json")
         if not data:
             return None
-        return data.get("dataStore", {}).get("type")
+        store_type: str | None = data.get("dataStore", {}).get("type")
+        return store_type
 
     async def upload_shapefile(
         self,
