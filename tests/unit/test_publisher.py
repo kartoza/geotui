@@ -1,5 +1,7 @@
 """Tests for the bulk shapefile publisher engine."""
 
+import io
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -109,3 +111,49 @@ class TestPublishConfig:
         assert cfg.dry_run is False
         assert cfg.naming == NamingStrategy.BASENAME
         assert cfg.retry_max_attempts == 3
+
+
+class TestPublishRunner:
+    @pytest.mark.asyncio
+    async def test_dry_run_skips_upload(self, shapefile_dir: Path) -> None:
+        """Dry run discovers but does not upload."""
+        from geotui.config import Connection
+        from geotui.publisher import run_publish
+
+        conn = Connection(name="Test", url="https://192.0.2.1:9999")
+        cfg = PublishConfig(
+            workspace="ws",
+            datastore="ds",
+            source_directory=shapefile_dir,
+            dry_run=True,
+        )
+        report = await run_publish(conn, cfg)
+        assert all(r.status == "DRY_RUN" for r in report.results)
+        assert report.created == 0
+        assert len(report.results) == 2
+
+    @pytest.mark.asyncio
+    async def test_bundle_zip_creation(self, shapefile_dir: Path) -> None:
+        """Test that bundles can be zipped."""
+        bundles, _ = discover_bundles(shapefile_dir, recurse=False)
+        roads = next(b for b in bundles if b.name == "roads")
+        zip_bytes = roads.to_zip()
+        assert len(zip_bytes) > 0
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+        names = zf.namelist()
+        assert "roads.shp" in names
+
+    @pytest.mark.asyncio
+    async def test_empty_directory(self, tmp_path: Path) -> None:
+        """Empty directory returns empty report."""
+        from geotui.config import Connection
+        from geotui.publisher import run_publish
+
+        conn = Connection(name="Test", url="https://192.0.2.1:9999")
+        cfg = PublishConfig(
+            workspace="ws",
+            datastore="ds",
+            source_directory=tmp_path,
+        )
+        report = await run_publish(conn, cfg)
+        assert len(report.results) == 0

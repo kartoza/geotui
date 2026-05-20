@@ -6,10 +6,19 @@ configuration dataclasses used by the upload execution engine.
 
 from __future__ import annotations
 
+import asyncio
+import io
+import logging
+import time
 import zipfile
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+
+from geotui.client import GeoServerClient, test_connection
+from geotui.config import Connection
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -65,13 +74,28 @@ class ShapefileBundle:
         """Sum of byte sizes of all component files."""
         return sum(f.stat().st_size for f in self.files if f.exists())
 
-    def to_zip(self, dest: Path) -> Path:
-        """Write the bundle into a ZIP archive at *dest* and return the path."""
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+    def to_zip(self, dest: Path | None = None) -> bytes:
+        """Create a ZIP archive of all bundle component files.
+
+        When *dest* is provided the archive is also written to that path.
+        Always returns the raw ZIP bytes.
+
+        Args:
+            dest: Optional path to write the ZIP file.  The parent directory
+                is created if it does not exist.
+
+        Returns:
+            Raw ZIP archive bytes.
+        """
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             for component in self.files:
                 zf.write(component, component.name)
-        return dest
+        data = buf.getvalue()
+        if dest is not None:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+        return data
 
 
 @dataclass
@@ -157,27 +181,32 @@ class PublishReport:
     wall_clock_seconds: float = 0.0
 
     # ------------------------------------------------------------------
-    # Computed properties
+    # Computed properties (counts)
     # ------------------------------------------------------------------
 
     @property
-    def created(self) -> list[BundleResult]:
-        return [r for r in self.results if r.action == "create" and r.status == "ok"]
+    def created(self) -> int:
+        """Number of layers successfully created."""
+        return sum(1 for r in self.results if r.action == "create" and r.status == "ok")
 
     @property
-    def updated(self) -> list[BundleResult]:
-        return [r for r in self.results if r.action == "update" and r.status == "ok"]
+    def updated(self) -> int:
+        """Number of layers successfully updated."""
+        return sum(1 for r in self.results if r.action == "update" and r.status == "ok")
 
     @property
-    def skipped(self) -> list[BundleResult]:
-        return [r for r in self.results if r.status in ("skipped", "dry_run")]
+    def skipped(self) -> int:
+        """Number of layers skipped (including dry-run)."""
+        return sum(1 for r in self.results if r.status in ("skipped", "DRY_RUN"))
 
     @property
-    def failed(self) -> list[BundleResult]:
-        return [r for r in self.results if r.status == "error"]
+    def failed(self) -> int:
+        """Number of layers that failed to upload."""
+        return sum(1 for r in self.results if r.status == "error")
 
     @property
     def total_uploaded_bytes(self) -> int:
+        """Total bytes uploaded across all successful bundles."""
         return sum(r.file_size for r in self.results)
 
 
@@ -322,3 +351,328 @@ def resolve_layer_names(
         )
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Publish execution engine
+# ---------------------------------------------------------------------------
+
+
+async def run_publish(
+    conn: Connection,
+    config: PublishConfig,
+    progress_callback: object = None,
+) -> PublishReport:
+    """Execute a bulk shapefile publish operation.
+
+    Discovers bundles under *config.source_directory*, resolves layer names,
+    verifies the GeoServer connection, then uploads each bundle concurrently
+    (honouring *config.concurrency*).
+
+    Args:
+        conn: GeoServer connection to target.
+        config: Publish configuration (workspace, datastore, options).
+        progress_callback: Optional callable with signature
+            ``(current: int, total: int, bundle_name: str) -> None``
+            called before each upload attempt.
+
+    Returns:
+        A :class:`PublishReport` summarising the outcome of every bundle.
+    """
+    start = time.monotonic()
+
+    # Discover bundles.
+    bundles, disc_warnings = discover_bundles(
+        config.source_directory, recurse=config.recurse
+    )
+
+    # Resolve layer names (may raise ValueError on collision).
+    try:
+        name_map = resolve_layer_names(
+            bundles, config.source_directory, config.naming, config.prefix
+        )
+    except ValueError as exc:
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            geoserver_version="",
+            username=conn.username,
+            warnings=[*disc_warnings, str(exc)],
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    # Build style map: explicit overrides first, then auto-match by layer name.
+    def _resolve_style(layer_name: str) -> str | None:
+        if layer_name in config.styles_mapping:
+            return config.styles_mapping[layer_name]
+        if config.styles_directory:
+            candidate = config.styles_directory / f"{layer_name}.sld"
+            if candidate.exists():
+                return layer_name
+        return None
+
+    # Dry-run: return DRY_RUN results immediately without touching GeoServer.
+    if config.dry_run:
+        results = [
+            BundleResult(
+                layer_name=layer_name,
+                source_path=bundle.directory / f"{bundle.name}.shp",
+                action="create",
+                status="DRY_RUN",
+            )
+            for bundle, layer_name in name_map.items()
+        ]
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            geoserver_version="",
+            username=conn.username,
+            results=results,
+            warnings=list(disc_warnings),
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    # Verify connection before attempting any uploads.
+    conn_result = await test_connection(conn)
+    if not conn_result.success:
+        results = [
+            BundleResult(
+                layer_name=layer_name,
+                source_path=bundle.directory / f"{bundle.name}.shp",
+                action="create",
+                status="error",
+                error=f"Connection failed: {conn_result.message}",
+            )
+            for bundle, layer_name in name_map.items()
+        ]
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            geoserver_version="",
+            username=conn.username,
+            results=results,
+            warnings=list(disc_warnings),
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    # Upload via shared client.
+    async with GeoServerClient(conn) as client:
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            geoserver_version=conn_result.version,
+            username=conn.username,
+            warnings=list(disc_warnings),
+        )
+
+        # Ensure workspace and datastore exist.
+        if not await _ensure_workspace(client, config, report):
+            report.wall_clock_seconds = time.monotonic() - start
+            return report
+        if not await _ensure_datastore(client, config, report):
+            report.wall_clock_seconds = time.monotonic() - start
+            return report
+
+        semaphore = asyncio.Semaphore(config.concurrency)
+        total = len(name_map)
+        tasks = [
+            _upload_bundle(
+                client,
+                config,
+                bundle,
+                layer_name,
+                _resolve_style(layer_name),
+                semaphore,
+                index,
+                total,
+                progress_callback,
+            )
+            for index, (bundle, layer_name) in enumerate(name_map.items(), start=1)
+        ]
+
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for outcome in task_results:
+            if isinstance(outcome, RuntimeError):
+                # fail_fast raised - remaining bundles show as error.
+                break
+            if isinstance(outcome, BaseException):
+                logger.exception("Unexpected error in upload task: %s", outcome)
+            else:
+                report.results.append(outcome)
+
+    report.wall_clock_seconds = time.monotonic() - start
+    return report
+
+
+async def _ensure_workspace(
+    client: GeoServerClient,
+    config: PublishConfig,
+    report: PublishReport,
+) -> bool:
+    """Ensure the target workspace exists, creating it if necessary.
+
+    Args:
+        client: Connected GeoServerClient.
+        config: Publish configuration.
+        report: Report to append warnings to.
+
+    Returns:
+        ``True`` if the workspace is available, ``False`` on failure.
+    """
+    workspaces = await client.get_workspaces()
+    ws_names = {ws.name for ws in workspaces}
+    if config.workspace in ws_names:
+        return True
+
+    logger.info("Creating workspace '%s'", config.workspace)
+    created = await client.create_workspace(config.workspace)
+    if not created:
+        report.warnings.append(f"Failed to create workspace '{config.workspace}'")
+        return False
+    return True
+
+
+async def _ensure_datastore(
+    client: GeoServerClient,
+    config: PublishConfig,
+    report: PublishReport,
+) -> bool:
+    """Ensure the target datastore exists and is of a compatible type.
+
+    If the datastore does not exist it is created as a Shapefile datastore.
+    If it exists but is not a Shapefile or Directory store the publish is
+    aborted with a warning.
+
+    Args:
+        client: Connected GeoServerClient.
+        config: Publish configuration.
+        report: Report to append warnings to.
+
+    Returns:
+        ``True`` if the datastore is ready, ``False`` on type mismatch or
+        creation failure.
+    """
+    store_type = await client.get_datastore_type(config.workspace, config.datastore)
+
+    if store_type is not None:
+        # Validate existing store is compatible with shapefile upload.
+        compatible = {"Shapefile", "Directory of spatial files (shapefiles)"}
+        if store_type not in compatible:
+            report.warnings.append(
+                f"Datastore '{config.datastore}' already exists with incompatible "
+                f"type '{store_type}'. Expected one of {sorted(compatible)}."
+            )
+            return False
+        return True
+
+    # Datastore does not exist - create a Shapefile directory store.
+    logger.info("Creating datastore '%s'", config.datastore)
+    created = await client.create_datastore(
+        workspace=config.workspace,
+        name=config.datastore,
+        store_type="Directory of spatial files (shapefiles)",
+        params={"url": f"file:data/{config.datastore}"},
+    )
+    if not created:
+        report.warnings.append(f"Failed to create datastore '{config.datastore}'")
+        return False
+    return True
+
+
+async def _upload_bundle(
+    client: GeoServerClient,
+    config: PublishConfig,
+    bundle: ShapefileBundle,
+    layer_name: str,
+    style: str | None,
+    semaphore: asyncio.Semaphore,
+    index: int,
+    total: int,
+    progress_callback: object,
+) -> BundleResult:
+    """Upload a single shapefile bundle to GeoServer with retry logic.
+
+    Args:
+        client: Connected GeoServerClient.
+        config: Publish configuration.
+        bundle: The shapefile bundle to upload.
+        layer_name: Resolved GeoServer layer name.
+        style: Style name to assign after upload, or ``None``.
+        semaphore: Concurrency limiter.
+        index: 1-based position of this bundle in the batch (for progress).
+        total: Total number of bundles in the batch.
+        progress_callback: Optional progress callable.
+
+    Returns:
+        :class:`BundleResult` describing the outcome.
+
+    Raises:
+        RuntimeError: If *config.fail_fast* is ``True`` and the upload fails.
+    """
+    source_path = bundle.directory / f"{bundle.name}.shp"
+
+    async with semaphore:
+        if callable(progress_callback):
+            progress_callback(index, total, bundle.name)
+
+        exists = await client.layer_exists(config.workspace, layer_name)
+        action = "update" if exists else "create"
+
+        last_error: str = ""
+        for attempt in range(config.retry_max_attempts):
+            try:
+                t0 = time.monotonic()
+                zip_data = bundle.to_zip()
+                success = await client.upload_shapefile(
+                    config.workspace, config.datastore, zip_data, update=exists
+                )
+                elapsed = time.monotonic() - t0
+
+                if success:
+                    if style:
+                        await client.assign_style(config.workspace, layer_name, style)
+                    return BundleResult(
+                        layer_name=layer_name,
+                        source_path=source_path,
+                        action=action,
+                        status="ok",
+                        file_size=len(zip_data),
+                        upload_time=elapsed,
+                    )
+
+                last_error = "Upload returned failure status"
+
+            except Exception as exc:
+                last_error = str(exc)
+                logger.warning(
+                    "Attempt %d/%d failed for '%s': %s",
+                    attempt + 1,
+                    config.retry_max_attempts,
+                    bundle.name,
+                    last_error,
+                )
+
+            # Exponential backoff before next attempt.
+            if attempt < config.retry_max_attempts - 1:
+                backoff = config.retry_backoff_seconds * (2**attempt)
+                await asyncio.sleep(backoff)
+
+        result = BundleResult(
+            layer_name=layer_name,
+            source_path=source_path,
+            action=action,
+            status="error",
+            error=last_error,
+        )
+
+        if config.fail_fast:
+            raise RuntimeError(
+                f"Upload failed for '{bundle.name}' and fail_fast is enabled: "
+                f"{last_error}"
+            )
+
+        return result
