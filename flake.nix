@@ -34,6 +34,7 @@
             pythonPkgs.ruff
             pythonPkgs.mypy
             pythonPkgs.bandit
+            pythonPkgs.pillow
 
             # Docs
             pythonPkgs.mkdocs

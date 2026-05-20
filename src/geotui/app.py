@@ -60,7 +60,11 @@ class GeoTUIApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        """Restore active connection on startup."""
+        """Show splash screen and restore active connection on startup."""
+        from geotui.screens.splash import SplashScreen
+
+        self.push_screen(SplashScreen())
+
         for conn in self.config_manager.config.connections:
             if conn.is_active:
                 dual_pane = self.query_one(DualPane)

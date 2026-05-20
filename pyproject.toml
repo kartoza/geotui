@@ -98,6 +98,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106", "T20"]
+"src/geotui/screens/logo_data.py" = ["E501"]
+
+[tool.ruff.format]
+exclude = ["src/geotui/screens/logo_data.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
