@@ -45,6 +45,49 @@ class GeoServerResource:
     href: str = ""
 
 
+async def resolve_base_url(
+    url: str, username: str, password: str, timeout: float = 10.0
+) -> str:
+    """Resolve the correct GeoServer REST API base URL.
+
+    Tries the URL as-is first, then falls back to {url}/geoserver.
+    This allows users to provide either the base domain or the full
+    GeoServer path.
+
+    Args:
+        url: User-provided URL.
+        username: GeoServer username.
+        password: GeoServer password.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        The working base URL, or the original URL if neither works.
+    """
+    base = url.rstrip("/")
+    auth = httpx.BasicAuth(username, password)
+    candidates = [base]
+    if not base.endswith("/geoserver"):
+        candidates.append(f"{base}/geoserver")
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
+            for candidate in candidates:
+                try:
+                    resp = await client.get(
+                        f"{candidate}/rest/about/version.json",
+                        auth=auth,
+                        headers={"Accept": "application/json"},
+                    )
+                    if resp.status_code == 200:
+                        return candidate
+                except httpx.RequestError:
+                    continue
+    except httpx.RequestError:
+        pass
+
+    return base
+
+
 class GeoServerClient:
     """Async client for GeoServer REST API.
 
@@ -67,6 +110,18 @@ class GeoServerClient:
         self._base_url = conn.url.rstrip("/")
         self._timeout = timeout
         self._auth = httpx.BasicAuth(conn.username, conn.password)
+        self._resolved = False
+
+    async def _ensure_resolved(self) -> None:
+        """Resolve the correct base URL on first use."""
+        if not self._resolved:
+            self._base_url = await resolve_base_url(
+                self._base_url,
+                self._conn.username,
+                self._conn.password,
+                self._timeout,
+            )
+            self._resolved = True
 
     async def _get(self, path: str) -> Any:
         """Make an authenticated GET request to the REST API.
@@ -77,6 +132,7 @@ class GeoServerClient:
         Returns:
             Parsed JSON response or None on failure.
         """
+        await self._ensure_resolved()
         try:
             async with httpx.AsyncClient(timeout=self._timeout, verify=True) as client:
                 response = await client.get(
@@ -312,8 +368,8 @@ class GeoServerClient:
 async def test_connection(conn: Connection, timeout: float = 10.0) -> ConnectionResult:
     """Test a GeoServer connection by querying the REST API.
 
-    Validates credentials by hitting /rest/about/version.json which
-    requires authentication on most GeoServer installations.
+    Tries the URL as-is first, then falls back to {url}/geoserver.
+    Validates credentials by hitting /rest/about/version.json.
 
     Args:
         conn: Connection configuration to test.
@@ -325,7 +381,7 @@ async def test_connection(conn: Connection, timeout: float = 10.0) -> Connection
     if not conn.url:
         return ConnectionResult(success=False, message="URL is required")
 
-    url = conn.url.rstrip("/")
+    url = await resolve_base_url(conn.url, conn.username, conn.password, timeout)
     endpoint = f"{url}/rest/about/version.json"
 
     try:
