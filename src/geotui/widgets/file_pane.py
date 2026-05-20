@@ -84,11 +84,9 @@ class FilePane(Widget):
 
     def watch_current_path(self, value: str) -> None:
         """Update footer when path changes."""
-        try:
+        if self.is_mounted:
             footer = self.query_one(".pane-footer", Static)
             footer.update(value)
-        except Exception:
-            pass
 
     def on_directory_tree_directory_selected(
         self, event: DirectoryTree.DirectorySelected

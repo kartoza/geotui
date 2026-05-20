@@ -144,13 +144,10 @@ class GeoServerTree(Widget):
             status = self.query_one("#tree-status", Static)
             ws_count = len(resources)
             status.update(f"{ws_count} workspace(s), {count} total resources")
-        except Exception:
+        except Exception:  # nosec B110
             if self.is_mounted:
-                try:
-                    status = self.query_one("#tree-status", Static)
-                    status.update(_("Connection failed"))
-                except Exception:
-                    pass
+                status = self.query_one("#tree-status", Static)
+                status.update(_("Connection failed"))
         finally:
             self.loading = False
 

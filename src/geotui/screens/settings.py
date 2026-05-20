@@ -408,8 +408,8 @@ class SettingsScreen(Screen[None]):
             try:
                 dual_pane = self.app.query_one(DualPane)
                 dual_pane.set_connection(conn)
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                self.log.warning("Could not update dual pane")
         else:
             self.notify(result.message, severity="error")
 

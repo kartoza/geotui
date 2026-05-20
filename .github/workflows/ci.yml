@@ -22,6 +22,8 @@ jobs:
         run: ruff format --check src/ tests/
       - name: Run bandit
         run: bandit -r src/ -c pyproject.toml
+      - name: Run codespell
+        run: pip install codespell && codespell --skip '*.po,*.pot,*.mo,*.lock' src/ tests/ docs/ README.md SPECIFICATION.md PACKAGES.md
 
   test:
     runs-on: ${{ matrix.os }}
