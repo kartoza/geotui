@@ -686,9 +686,11 @@ class GeoServerClient:
         Returns:
             True if the upload succeeded (HTTP 201 Created or 200 OK).
         """
-        path = f"/rest/workspaces/{workspace}/datastores/{store}/file.shp"
+        path = (
+            f"/rest/workspaces/{workspace}/datastores/{store}/file.shp?configure=first"
+        )
         if update:
-            path += "?update=overwrite"
+            path += "&update=overwrite"
         status = await self._put(path, zip_data, "application/zip")
         return status in (200, 201)
 
