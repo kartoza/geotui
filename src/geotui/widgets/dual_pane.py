@@ -74,12 +74,25 @@ class DualPane(Widget):
     def get_active_pane_type(self) -> str:
         """Get the type of the currently active pane.
 
+        Checks both the reactive state and actual focus to determine
+        which pane is active. Returns 'geoserver' if the GeoServer
+        pane is active and has a connection, 'local' otherwise.
+
         Returns:
-            'geoserver' if the active pane has a GeoServer connection,
-            'local' otherwise.
+            'geoserver' or 'local'.
         """
-        if self.active_pane == "right":
-            right = self.query_one("#right-pane", GeoServerTree)
-            if right.connection is not None:
-                return "geoserver"
+        right = self.query_one("#right-pane", GeoServerTree)
+
+        # Check reactive state or if any child of the right pane has focus
+        right_active = self.active_pane == "right"
+        if not right_active and self.app.focused is not None:
+            widget = self.app.focused
+            while widget is not None:
+                if widget is right:
+                    right_active = True
+                    break
+                widget = widget.parent
+
+        if right_active and right.connection is not None:
+            return "geoserver"
         return "local"

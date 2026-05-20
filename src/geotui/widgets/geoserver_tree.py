@@ -1,8 +1,8 @@
 """GeoServer resource tree widget.
 
 Displays the GeoServer resource hierarchy (workspaces > stores > layers)
-in a tree view, populated from the active connection. Provides context-
-sensitive actions for creating workspaces and stores.
+in a tree view, populated from the active connection. Provides actions
+for creating workspaces and stores via the F2 context menu.
 """
 
 from textual.app import ComposeResult
@@ -20,33 +20,42 @@ from textual.widgets import (
 from textual.widgets.option_list import Option
 
 from geotui.client import (
-    COVERAGESTORE_TYPES,
-    DATASTORE_TYPES,
+    STORE_TYPES,
     GeoServerClient,
     GeoServerResource,
+    StoreType,
 )
 from geotui.config import Connection
 from geotui.i18n import _
+from geotui.theme import KARTOZA_COLORS
 
-RESOURCE_ICONS = {
-    "workspace": "\U0001f4c2",
-    "datastore": "\U0001f5c4",
-    "coveragestore": "\U0001f30d",
-    "wmsstore": "\U0001f310",
-    "layer": "\U0001f5fa",
-    "coverage": "\U0001f30e",
-    "wms_layer": "\U0001f310",
+# Colors for resource types
+_COLORS = {
+    "datastore": KARTOZA_COLORS["highlight4"],
+    "coveragestore": KARTOZA_COLORS["highlight1"],
+    "wmsstore": KARTOZA_COLORS["highlight2"],
+    "workspace": KARTOZA_COLORS["highlight2"],
+    "default": KARTOZA_COLORS["highlight3"],
 }
+
+_LABELS = {
+    "datastore": "vector",
+    "coveragestore": "raster",
+    "wmsstore": "WMS",
+}
+
+_CATEGORY_COLORS = {
+    "vector": KARTOZA_COLORS["highlight4"],
+    "raster": KARTOZA_COLORS["highlight1"],
+    "remote": KARTOZA_COLORS["highlight2"],
+}
+
+# Maximum number of dynamic form fields
+_MAX_FIELDS = 6
 
 
 class GeoServerTree(Widget):
-    """Tree widget showing GeoServer workspace/store/layer hierarchy.
-
-    Provides context-sensitive actions when active:
-    - w: Create workspace
-    - s: Create store (with type selection)
-    - r: Refresh tree
-    """
+    """Tree widget showing GeoServer workspace/store/layer hierarchy."""
 
     BINDINGS = [
         ("r", "refresh", _("Refresh")),
@@ -120,7 +129,6 @@ class GeoServerTree(Widget):
 
     GeoServerTree #action-panel Input {
         width: 100%;
-        margin: 0 0 0 0;
     }
 
     GeoServerTree #action-panel Input:focus {
@@ -161,6 +169,13 @@ class GeoServerTree(Widget):
     is_active: reactive[bool] = reactive(False)
     loading: reactive[bool] = reactive(False)
 
+    def __init__(self, **kwargs: object) -> None:
+        """Initialize the tree widget."""
+        super().__init__(**kwargs)
+        self._current_action = ""
+        self._current_workspace = ""
+        self._selected_store_type: StoreType | None = None
+
     def compose(self) -> ComposeResult:
         """Compose the tree widget."""
         with Vertical():
@@ -173,29 +188,14 @@ class GeoServerTree(Widget):
             yield Static("", id="tree-status", classes="tree-footer")
             with Vertical(id="action-panel"):
                 yield Label("", id="action-title", classes="action-title")
-                yield Label("", id="field1-label", classes="field-label")
-                yield Input(id="field1-input")
-                yield Label("", id="field2-label", classes="field-label")
-                yield Input(id="field2-input")
-                yield Label("", id="field3-label", classes="field-label")
-                yield Input(id="field3-input")
-                yield Label("", id="field4-label", classes="field-label")
-                yield Input(id="field4-input")
-                yield Label("", id="field5-label", classes="field-label")
-                yield Input(id="field5-input")
-                yield Label("", id="field6-label", classes="field-label")
-                yield Input(id="field6-input")
+                for i in range(1, _MAX_FIELDS + 1):
+                    yield Label("", id=f"field{i}-label", classes="field-label")
+                    yield Input(id=f"field{i}-input")
                 yield OptionList(id="store-type-list")
                 with Horizontal(id="action-buttons"):
+                    yield Button(_("Create"), id="btn-create", classes="btn-success")
                     yield Button(
-                        _("Create"),
-                        id="btn-create",
-                        classes="btn-success",
-                    )
-                    yield Button(
-                        _("Cancel"),
-                        id="btn-action-cancel",
-                        classes="btn-default",
+                        _("Cancel"), id="btn-action-cancel", classes="btn-default"
                     )
 
     def on_mount(self) -> None:
@@ -205,56 +205,55 @@ class GeoServerTree(Widget):
         tree.show_root = False
         self._hide_action_panel()
 
+    # ── Action panel management ────────────────────────────
+
     def _hide_action_panel(self) -> None:
-        """Hide the action panel and all its fields."""
+        """Hide the action panel."""
         self.query_one("#action-panel").display = False
 
-    def _show_action_panel(
-        self,
-        title: str,
-        fields: list[tuple[str, str, str]],
-        show_store_types: bool = False,
-    ) -> None:
-        """Show the action panel with specified fields.
+    def _show_fields(self, title: str, fields: list[tuple[str, str, str]]) -> None:
+        """Show the action panel with the given fields.
 
         Args:
             title: Panel title.
-            fields: List of (label_id_suffix, label_text, placeholder).
-            show_store_types: Whether to show the store type selector.
+            fields: List of (field_name, label, placeholder).
         """
         panel = self.query_one("#action-panel")
         panel.display = True
-
         self.query_one("#action-title", Label).update(title)
+        self.query_one("#store-type-list", OptionList).display = False
 
-        # Hide all fields first
-        for i in range(1, 7):
-            self.query_one(f"#field{i}-label", Label).display = False
-            self.query_one(f"#field{i}-input", Input).display = False
-            self.query_one(f"#field{i}-input", Input).value = ""
-
-        # Show requested fields
-        for idx, (_field_id, label_text, placeholder) in enumerate(fields):
-            field_num = idx + 1
-            lbl = self.query_one(f"#field{field_num}-label", Label)
-            lbl.update(label_text)
-            lbl.display = True
-            inp = self.query_one(f"#field{field_num}-input", Input)
-            inp.placeholder = placeholder
-            inp.display = True
-
-        store_list = self.query_one("#store-type-list", OptionList)
-        store_list.display = show_store_types
+        for i in range(1, _MAX_FIELDS + 1):
+            show = i <= len(fields)
+            self.query_one(f"#field{i}-label", Label).display = show
+            inp = self.query_one(f"#field{i}-input", Input)
+            inp.display = show
+            inp.value = ""
+            if show:
+                _name, label, placeholder = fields[i - 1]
+                self.query_one(f"#field{i}-label", Label).update(label)
+                inp.placeholder = placeholder
 
         if fields:
             self.query_one("#field1-input", Input).focus()
 
-    def _get_selected_workspace(self) -> str | None:
-        """Get the workspace name from the currently selected tree node.
+    def _get_field_values(self, fields: list[tuple[str, str, str]]) -> dict[str, str]:
+        """Read form values keyed by field name.
+
+        Args:
+            fields: Field definitions to read from.
 
         Returns:
-            Workspace name or None.
+            Dict mapping field name to input value.
         """
+        values = {}
+        for i, (field_name, _label, _ph) in enumerate(fields):
+            inp = self.query_one(f"#field{i + 1}-input", Input)
+            values[field_name] = inp.value.strip()
+        return values
+
+    def _get_selected_workspace(self) -> str | None:
+        """Get the workspace name from the selected tree node."""
         tree = self.query_one("#gs-tree", Tree)
         if tree.cursor_node and tree.cursor_node.data:
             node = tree.cursor_node
@@ -262,7 +261,6 @@ class GeoServerTree(Widget):
             if isinstance(data, GeoServerResource):
                 if data.resource_type == "workspace":
                     return data.name
-                # Walk up to find workspace parent
                 parent = node.parent
                 while parent and parent.data:
                     if (
@@ -273,7 +271,7 @@ class GeoServerTree(Widget):
                     parent = parent.parent
         return None
 
-    # ── Actions ────────────────────────────────────────────
+    # ── Actions (called from F2 menu) ──────────────────────
 
     def action_create_workspace(self) -> None:
         """Show the create workspace form."""
@@ -281,9 +279,9 @@ class GeoServerTree(Widget):
             self.app.notify(_("No connection active"), severity="warning")
             return
         self._current_action = "workspace"
-        self._show_action_panel(
+        self._show_fields(
             _("Create Workspace"),
-            [("name", _("Workspace Name"), _("my_workspace"))],
+            [("name", _("Workspace Name"), "my_workspace")],
         )
 
     def action_create_store(self) -> None:
@@ -307,92 +305,36 @@ class GeoServerTree(Widget):
         panel.display = True
         self.query_one("#action-title", Label).update(f"{_('Create Store')} ({ws})")
 
-        # Hide fields, show type list
-        for i in range(1, 7):
+        for i in range(1, _MAX_FIELDS + 1):
             self.query_one(f"#field{i}-label", Label).display = False
             self.query_one(f"#field{i}-input", Input).display = False
 
         store_list = self.query_one("#store-type-list", OptionList)
         store_list.clear_options()
-        for type_id, desc in DATASTORE_TYPES:
-            store_list.add_option(Option(f"[#06969A]{type_id}[/] {desc}"))
-        for type_id, desc in COVERAGESTORE_TYPES:
-            store_list.add_option(Option(f"[#DF9E2F]{type_id}[/] {desc}"))
-        store_list.add_option(Option("[#569FC6]WMS[/] Remote WMS service"))
+        for st in STORE_TYPES:
+            color = _CATEGORY_COLORS.get(st.category, _COLORS["default"])
+            store_list.add_option(Option(f"[{color}]{st.label}[/] {st.category}"))
         store_list.display = True
         store_list.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        """Handle store type selection."""
-        if not hasattr(self, "_current_action"):
-            return
+        """Handle store type selection from the list."""
         if self._current_action != "store_select":
             return
 
         idx = event.option_index
-        all_types = list(DATASTORE_TYPES) + list(COVERAGESTORE_TYPES)
-        all_types.append(("WMS", "Remote WMS service"))
-
-        if idx >= len(all_types):
+        if idx >= len(STORE_TYPES):
             return
 
-        type_id = all_types[idx][0]
-        self._selected_store_type = type_id
+        st = STORE_TYPES[idx]
+        self._selected_store_type = st
         self._current_action = "store_form"
 
         self.query_one("#store-type-list", OptionList).display = False
-
-        ws = self._current_workspace
-        title = f"{_('Create')} {type_id} ({ws})"
-
-        if type_id == "PostGIS":
-            self._show_action_panel(
-                title,
-                [
-                    ("name", _("Store Name"), _("my_postgis")),
-                    ("host", _("Host"), "localhost"),
-                    ("port", _("Port"), "5432"),
-                    ("db", _("Database"), _("my_database")),
-                    ("user", _("DB User"), "postgres"),
-                    ("pass", _("DB Password"), _("password")),
-                ],
-            )
-        elif type_id == "WMS":
-            self._show_action_panel(
-                title,
-                [
-                    ("name", _("Store Name"), _("remote_wms")),
-                    (
-                        "url",
-                        _("Capabilities URL"),
-                        "https://example.com/wms?service=WMS&request=GetCapabilities",
-                    ),
-                ],
-            )
-        elif type_id in ("GeoTIFF", "WorldImage", "ImageMosaic"):
-            self._show_action_panel(
-                title,
-                [
-                    ("name", _("Store Name"), _("my_raster")),
-                    (
-                        "path",
-                        _("File Path"),
-                        "file:data/raster/dem.tif",
-                    ),
-                ],
-            )
-        else:
-            self._show_action_panel(
-                title,
-                [
-                    ("name", _("Store Name"), _("my_store")),
-                    (
-                        "path",
-                        _("File/Directory Path"),
-                        "file:data/myfile.shp",
-                    ),
-                ],
-            )
+        self._show_fields(
+            f"{_('Create')} {st.label} ({self._current_workspace})",
+            st.fields,
+        )
 
     def action_refresh(self) -> None:
         """Refresh the tree."""
@@ -410,27 +352,26 @@ class GeoServerTree(Widget):
         if not self.connection:
             return
 
-        action = getattr(self, "_current_action", "")
-        if action == "workspace":
+        if self._current_action == "workspace":
             name = self.query_one("#field1-input", Input).value.strip()
             if not name:
                 self.app.notify(_("Name is required"), severity="error")
                 return
+            self.run_worker(self._create_workspace(name), exit_on_error=False)
+        elif self._current_action == "store_form" and self._selected_store_type:
+            values = self._get_field_values(self._selected_store_type.fields)
+            if not values.get("name"):
+                self.app.notify(_("Name is required"), severity="error")
+                return
             self.run_worker(
-                self._create_workspace(name),
+                self._create_store(self._selected_store_type, values),
                 exit_on_error=False,
             )
-        elif action == "store_form":
-            self._do_create_store()
 
     async def _create_workspace(self, name: str) -> None:
-        """Create a workspace via the API.
-
-        Args:
-            name: Workspace name.
-        """
-        client = GeoServerClient(self.connection)
-        ok = await client.create_workspace(name)
+        """Create a workspace via the API."""
+        async with GeoServerClient(self.connection) as client:
+            ok = await client.create_workspace(name)
         if self.is_mounted:
             if ok:
                 self.app.notify(f"Workspace '{name}' created", severity="information")
@@ -442,74 +383,25 @@ class GeoServerTree(Widget):
                     severity="error",
                 )
 
-    def _do_create_store(self) -> None:
-        """Dispatch store creation based on selected type."""
-        store_type = getattr(self, "_selected_store_type", "")
-        ws = getattr(self, "_current_workspace", "")
-        name = self.query_one("#field1-input", Input).value.strip()
-
-        if not name:
-            self.app.notify(_("Name is required"), severity="error")
-            return
-
-        self.run_worker(
-            self._create_store(store_type, ws, name),
-            exit_on_error=False,
-        )
-
-    async def _create_store(self, store_type: str, workspace: str, name: str) -> None:
-        """Create a store via the API.
-
-        Args:
-            store_type: Type of store to create.
-            workspace: Target workspace.
-            name: Store name.
-        """
-        client = GeoServerClient(self.connection)
-        ok = False
-
-        if store_type == "Shapefile":
-            path = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_datastore_shapefile(workspace, name, path)
-        elif store_type == "Directory of Shapefiles":
-            path = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_datastore_directory(workspace, name, path)
-        elif store_type == "GeoPackage":
-            path = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_datastore_gpkg(workspace, name, path)
-        elif store_type == "PostGIS":
-            host = self.query_one("#field2-input", Input).value.strip()
-            port = self.query_one("#field3-input", Input).value.strip()
-            db = self.query_one("#field4-input", Input).value.strip()
-            user = self.query_one("#field5-input", Input).value.strip()
-            passwd = self.query_one("#field6-input", Input).value
-            ok = await client.create_datastore_postgis(
-                workspace, name, host, port, db, user, passwd
-            )
-        elif store_type == "GeoTIFF":
-            path = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_coveragestore_geotiff(workspace, name, path)
-        elif store_type == "WorldImage":
-            path = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_coveragestore_worldimage(workspace, name, path)
-        elif store_type == "ImageMosaic":
-            path = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_coveragestore_imagemosaic(workspace, name, path)
-        elif store_type == "WMS":
-            url = self.query_one("#field2-input", Input).value.strip()
-            ok = await client.create_wmsstore(workspace, name, url)
-
+    async def _create_store(
+        self, store_type: StoreType, field_values: dict[str, str]
+    ) -> None:
+        """Create a store via the API using the type registry."""
+        ws = self._current_workspace
+        name = field_values.get("name", "")
+        async with GeoServerClient(self.connection) as client:
+            ok = await client.create_store_from_type(ws, store_type, field_values)
         if self.is_mounted:
             if ok:
                 self.app.notify(
-                    f"{store_type} '{name}' created in {workspace}",
+                    f"{store_type.label} '{name}' created in {ws}",
                     severity="information",
                 )
                 self._hide_action_panel()
                 self.refresh_tree()
             else:
                 self.app.notify(
-                    f"Failed to create {store_type} '{name}'",
+                    f"Failed to create {store_type.label} '{name}'",
                     severity="error",
                 )
 
@@ -534,11 +426,7 @@ class GeoServerTree(Widget):
             self.query_one("#gs-tree", Tree).display = False
 
     def _load_tree(self, conn: Connection) -> None:
-        """Start loading the GeoServer resource tree.
-
-        Args:
-            conn: Active connection to load from.
-        """
+        """Start loading the GeoServer resource tree."""
         self.loading = True
         self.query_one("#no-connection", Static).display = False
         self.query_one("#gs-tree", Tree).display = True
@@ -546,49 +434,41 @@ class GeoServerTree(Widget):
         self.run_worker(self._fetch_tree(conn), exclusive=True, exit_on_error=False)
 
     async def _fetch_tree(self, conn: Connection) -> None:
-        """Fetch and populate the tree from GeoServer.
-
-        Args:
-            conn: Connection to fetch from.
-        """
-        client = GeoServerClient(conn)
-        try:
-            resources = await client.get_full_tree()
-            if not self.is_mounted:
-                return
-            self._populate_tree(resources)
-            count = sum(
-                1 + len(ws.children) + sum(len(s.children) for s in ws.children)
-                for ws in resources
-            )
-            status = self.query_one("#tree-status", Static)
-            ws_count = len(resources)
-            status.update(f"{ws_count} workspace(s), {count} total resources")
-        except Exception:  # nosec B110
-            if self.is_mounted:
+        """Fetch and populate the tree from GeoServer."""
+        async with GeoServerClient(conn) as client:
+            try:
+                resources = await client.get_full_tree()
+                if not self.is_mounted:
+                    return
+                self._populate_tree(resources)
+                count = sum(
+                    1 + len(ws.children) + sum(len(s.children) for s in ws.children)
+                    for ws in resources
+                )
+                ws_count = len(resources)
                 status = self.query_one("#tree-status", Static)
-                status.update(_("Connection failed"))
-        finally:
-            self.loading = False
+                status.update(f"{ws_count} workspace(s), {count} total resources")
+            except Exception:  # nosec B110
+                if self.is_mounted:
+                    status = self.query_one("#tree-status", Static)
+                    status.update(_("Connection failed"))
+            finally:
+                self.loading = False
 
     def _populate_tree(self, resources: list[GeoServerResource]) -> None:
-        """Populate the tree widget with GeoServer resources.
-
-        Args:
-            resources: List of workspace resources with children.
-        """
+        """Populate the tree widget with GeoServer resources."""
         tree = self.query_one("#gs-tree", Tree)
         tree.clear()
 
         for ws in resources:
             ws_node = tree.root.add(
-                f"[bold #569FC6]{ws.name}[/]",
+                f"[bold {_COLORS['workspace']}]{ws.name}[/]",
                 data=ws,
                 expand=False,
             )
             for store in ws.children:
-                color = self._store_color(store.resource_type)
-                label = self._store_label(store.resource_type)
+                color = _COLORS.get(store.resource_type, _COLORS["default"])
+                label = _LABELS.get(store.resource_type, store.resource_type)
                 store_node = ws_node.add(
                     f"[{color}]{store.name}[/] [{label}]",
                     data=store,
@@ -596,7 +476,7 @@ class GeoServerTree(Widget):
                 )
                 for layer in store.children:
                     store_node.add_leaf(
-                        f"[#8A8B8B]{layer.name}[/]",
+                        f"[{_COLORS['default']}]{layer.name}[/]",
                         data=layer,
                     )
 
@@ -605,22 +485,12 @@ class GeoServerTree(Widget):
     @staticmethod
     def _store_color(resource_type: str) -> str:
         """Get the display color for a store type."""
-        colors = {
-            "datastore": "#06969A",
-            "coveragestore": "#DF9E2F",
-            "wmsstore": "#569FC6",
-        }
-        return colors.get(resource_type, "#8A8B8B")
+        return _COLORS.get(resource_type, _COLORS["default"])
 
     @staticmethod
     def _store_label(resource_type: str) -> str:
         """Get a short label for a store type."""
-        labels = {
-            "datastore": "vector",
-            "coveragestore": "raster",
-            "wmsstore": "WMS",
-        }
-        return labels.get(resource_type, resource_type)
+        return _LABELS.get(resource_type, resource_type)
 
     def refresh_tree(self) -> None:
         """Refresh the tree from the current connection."""

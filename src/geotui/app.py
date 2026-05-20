@@ -42,11 +42,6 @@ class GeoTUIApp(App[None]):
         Binding("ctrl+l", "toggle_language", _("Language"), show=False),
     ]
 
-    def get_css_variables(self) -> dict[str, str]:
-        """Override CSS variables with Kartoza theme."""
-        variables = super().get_css_variables()
-        return variables
-
     @property
     def design(self) -> dict[str, ColorSystem]:
         """Return custom Kartoza color schemes."""
