@@ -93,6 +93,8 @@ class GeoTUIApp(App[None]):
                 tree.action_create_store()
             elif action_id == "gs_refresh":
                 tree.refresh_tree()
+            elif action_id == "gs_bulk_publish":
+                tree.action_bulk_publish()
             elif action_id == "local_mkdir":
                 self.action_mkdir()
 

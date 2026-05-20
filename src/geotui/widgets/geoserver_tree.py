@@ -5,6 +5,8 @@ in a tree view, populated from the active connection. Provides actions
 for creating workspaces and stores via the F2 context menu.
 """
 
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -336,6 +338,23 @@ class GeoServerTree(Widget):
             st.fields,
         )
 
+    def action_bulk_publish(self) -> None:
+        """Show the bulk publish configuration form."""
+        if not self.connection:
+            self.app.notify(_("No connection active"), severity="warning")
+            return
+        self._current_action = "bulk_publish"
+        self._show_fields(
+            _("Bulk Publish Shapefiles"),
+            [
+                ("workspace", _("Workspace"), "my_workspace"),
+                ("datastore", _("Datastore"), "my_datastore"),
+                ("source", _("Source Directory"), str(Path.home())),
+                ("naming", _("Naming (basename/path_slug)"), "basename"),
+                ("concurrency", _("Concurrency"), "4"),
+            ],
+        )
+
     def action_refresh(self) -> None:
         """Refresh the tree."""
         self.refresh_tree()
@@ -367,6 +386,60 @@ class GeoServerTree(Widget):
                 self._create_store(self._selected_store_type, values),
                 exit_on_error=False,
             )
+        elif self._current_action == "bulk_publish":
+            fields = [
+                ("workspace", "", ""),
+                ("datastore", "", ""),
+                ("source", "", ""),
+                ("naming", "", ""),
+                ("concurrency", "", ""),
+            ]
+            values = self._get_field_values(fields)
+            if not values.get("workspace"):
+                self.app.notify(_("Workspace is required"), severity="error")
+                return
+            if not values.get("datastore"):
+                self.app.notify(_("Datastore is required"), severity="error")
+                return
+            self.run_worker(self._run_bulk_publish(values), exit_on_error=False)
+
+    async def _run_bulk_publish(self, values: dict[str, str]) -> None:
+        """Run bulk publish in background."""
+        from geotui.publisher import NamingStrategy, PublishConfig, run_publish
+        from geotui.report import generate_json_report, generate_pdf_report
+
+        config = PublishConfig(
+            workspace=values.get("workspace", ""),
+            datastore=values.get("datastore", ""),
+            source_directory=Path(values.get("source", str(Path.home()))),
+            naming=NamingStrategy(values.get("naming", "basename")),
+            concurrency=int(values.get("concurrency", "4")),
+        )
+
+        def progress(current: int, total: int, name: str) -> None:
+            if self.is_mounted:
+                status = self.query_one("#tree-status", Static)
+                status.update(f"Publishing {current}/{total}: {name}")
+
+        report = await run_publish(self.connection, config, progress)
+
+        if self.is_mounted:
+            from datetime import datetime, timezone
+
+            ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
+            out_dir = Path.home() / ".local/share/geotui/reports"
+            pdf_path = out_dir / f"publish-{ts}.pdf"
+            json_path = out_dir / f"publish-{ts}.json"
+            generate_pdf_report(report, pdf_path)
+            generate_json_report(report, json_path)
+
+            summary = (
+                f"Created: {report.created} | Updated: {report.updated} | "
+                f"Failed: {report.failed}\nReport: {pdf_path}"
+            )
+            self.app.notify(summary, severity="information", timeout=10)
+            self._hide_action_panel()
+            self.refresh_tree()
 
     async def _create_workspace(self, name: str) -> None:
         """Create a workspace via the API."""
