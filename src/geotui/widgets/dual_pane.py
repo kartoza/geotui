@@ -70,3 +70,16 @@ class DualPane(Widget):
         """
         right = self.query_one("#right-pane", GeoServerTree)
         right.connection = conn
+
+    def get_active_pane_type(self) -> str:
+        """Get the type of the currently active pane.
+
+        Returns:
+            'geoserver' if the active pane has a GeoServer connection,
+            'local' otherwise.
+        """
+        if self.active_pane == "right":
+            right = self.query_one("#right-pane", GeoServerTree)
+            if right.connection is not None:
+                return "geoserver"
+        return "local"

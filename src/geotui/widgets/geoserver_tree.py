@@ -49,8 +49,6 @@ class GeoServerTree(Widget):
     """
 
     BINDINGS = [
-        ("w", "create_workspace", _("New Workspace")),
-        ("s", "create_store", _("New Store")),
         ("r", "refresh", _("Refresh")),
     ]
 

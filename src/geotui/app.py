@@ -81,8 +81,27 @@ class GeoTUIApp(App[None]):
         self.notify(_("Help - Press F1 for assistance"), title=_("GeoTUI Help"))
 
     def action_menu(self) -> None:
-        """Show menu."""
-        self.notify(_("Menu"), title=_("GeoTUI"))
+        """Show context-sensitive F2 menu."""
+        from geotui.screens.context_menu import ContextMenuScreen
+        from geotui.widgets.geoserver_tree import GeoServerTree
+
+        dual_pane = self.query_one(DualPane)
+        active = dual_pane.get_active_pane_type()
+
+        def handle_menu_result(action_id: str | None) -> None:
+            if not action_id:
+                return
+            tree = self.query_one("#right-pane", GeoServerTree)
+            if action_id == "gs_create_workspace":
+                tree.action_create_workspace()
+            elif action_id == "gs_create_store":
+                tree.action_create_store()
+            elif action_id == "gs_refresh":
+                tree.refresh_tree()
+            elif action_id == "local_mkdir":
+                self.action_mkdir()
+
+        self.push_screen(ContextMenuScreen(active), callback=handle_menu_result)
 
     def action_copy(self) -> None:
         """Copy selected item."""
