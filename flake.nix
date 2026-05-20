@@ -35,6 +35,8 @@
             pythonPkgs.mypy
             pythonPkgs.bandit
             pythonPkgs.pillow
+            pythonPkgs.fpdf2
+            pythonPkgs.click
 
             # Docs
             pythonPkgs.mkdocs

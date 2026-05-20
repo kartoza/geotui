@@ -173,9 +173,9 @@ class PublishReport:
     """Summary report produced after a bulk publish run."""
 
     config: PublishConfig
-    geoserver_url: str
-    geoserver_version: str
-    username: str
+    geoserver_url: str = ""
+    geoserver_version: str = ""
+    username: str = ""
     results: list[BundleResult] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     wall_clock_seconds: float = 0.0
