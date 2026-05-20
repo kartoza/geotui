@@ -364,6 +364,294 @@ class GeoServerClient:
 
         return workspaces
 
+    # ── Create operations ──────────────────────────────────────
+
+    async def _post(self, path: str, json_data: dict) -> bool:
+        """Make an authenticated POST request.
+
+        Args:
+            path: API path relative to base URL.
+            json_data: JSON body to send.
+
+        Returns:
+            True if the request returned 201 Created.
+        """
+        await self._ensure_resolved()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=True) as client:
+                response = await client.post(
+                    f"{self._base_url}{path}",
+                    json=json_data,
+                    auth=self._auth,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                return response.status_code == 201
+        except httpx.RequestError:
+            return False
+
+    async def create_workspace(self, name: str) -> bool:
+        """Create a new workspace.
+
+        Args:
+            name: Workspace name.
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            "/rest/workspaces.json",
+            {"workspace": {"name": name}},
+        )
+
+    async def create_datastore_shapefile(
+        self, workspace: str, name: str, url: str
+    ) -> bool:
+        """Create a Shapefile datastore.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            url: Path to shapefile (file:data/shapefiles/myfile.shp).
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/datastores.json",
+            {
+                "dataStore": {
+                    "name": name,
+                    "type": "Shapefile",
+                    "connectionParameters": {
+                        "entry": [
+                            {"@key": "url", "$": url},
+                        ]
+                    },
+                }
+            },
+        )
+
+    async def create_datastore_gpkg(
+        self, workspace: str, name: str, database: str
+    ) -> bool:
+        """Create a GeoPackage datastore.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            database: Path to .gpkg file (file:data/myfile.gpkg).
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/datastores.json",
+            {
+                "dataStore": {
+                    "name": name,
+                    "type": "GeoPackage",
+                    "connectionParameters": {
+                        "entry": [
+                            {"@key": "database", "$": database},
+                            {"@key": "dbtype", "$": "geopkg"},
+                        ]
+                    },
+                }
+            },
+        )
+
+    async def create_datastore_postgis(
+        self,
+        workspace: str,
+        name: str,
+        host: str,
+        port: str,
+        database: str,
+        user: str,
+        passwd: str,
+        schema: str = "public",
+    ) -> bool:
+        """Create a PostGIS datastore.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            host: Database host.
+            port: Database port.
+            database: Database name.
+            user: Database user.
+            passwd: Database password.
+            schema: Database schema.
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/datastores.json",
+            {
+                "dataStore": {
+                    "name": name,
+                    "type": "PostGIS",
+                    "connectionParameters": {
+                        "entry": [
+                            {"@key": "host", "$": host},
+                            {"@key": "port", "$": port},
+                            {"@key": "database", "$": database},
+                            {"@key": "user", "$": user},
+                            {"@key": "passwd", "$": passwd},
+                            {"@key": "schema", "$": schema},
+                            {"@key": "dbtype", "$": "postgis"},
+                        ]
+                    },
+                }
+            },
+        )
+
+    async def create_datastore_directory(
+        self, workspace: str, name: str, url: str
+    ) -> bool:
+        """Create a Directory of Shapefiles datastore.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            url: Path to directory (file:data/shapefiles/).
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/datastores.json",
+            {
+                "dataStore": {
+                    "name": name,
+                    "type": "Directory of spatial files (shapefiles)",
+                    "connectionParameters": {
+                        "entry": [
+                            {"@key": "url", "$": url},
+                        ]
+                    },
+                }
+            },
+        )
+
+    async def create_coveragestore_geotiff(
+        self, workspace: str, name: str, url: str
+    ) -> bool:
+        """Create a GeoTIFF coverage store.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            url: Path to GeoTIFF file (file:data/raster/dem.tif).
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/coveragestores.json",
+            {
+                "coverageStore": {
+                    "name": name,
+                    "type": "GeoTIFF",
+                    "workspace": {"name": workspace},
+                    "url": url,
+                }
+            },
+        )
+
+    async def create_coveragestore_worldimage(
+        self, workspace: str, name: str, url: str
+    ) -> bool:
+        """Create a WorldImage coverage store.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            url: Path to image file with world file.
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/coveragestores.json",
+            {
+                "coverageStore": {
+                    "name": name,
+                    "type": "WorldImage",
+                    "workspace": {"name": workspace},
+                    "url": url,
+                }
+            },
+        )
+
+    async def create_coveragestore_imagemosaic(
+        self, workspace: str, name: str, url: str
+    ) -> bool:
+        """Create an ImageMosaic coverage store.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            url: Path to mosaic directory.
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/coveragestores.json",
+            {
+                "coverageStore": {
+                    "name": name,
+                    "type": "ImageMosaic",
+                    "workspace": {"name": workspace},
+                    "url": url,
+                }
+            },
+        )
+
+    async def create_wmsstore(
+        self, workspace: str, name: str, capabilities_url: str
+    ) -> bool:
+        """Create a WMS store.
+
+        Args:
+            workspace: Target workspace name.
+            name: Store name.
+            capabilities_url: GetCapabilities URL of the remote WMS.
+
+        Returns:
+            True if created successfully.
+        """
+        return await self._post(
+            f"/rest/workspaces/{workspace}/wmsstores.json",
+            {
+                "wmsStore": {
+                    "name": name,
+                    "type": "WMS",
+                    "capabilitiesURL": capabilities_url,
+                }
+            },
+        )
+
+
+# Supported store types for the UI
+DATASTORE_TYPES = [
+    ("Shapefile", "Single shapefile"),
+    ("Directory of Shapefiles", "Directory of spatial files"),
+    ("GeoPackage", "OGC GeoPackage"),
+    ("PostGIS", "PostGIS database"),
+]
+
+COVERAGESTORE_TYPES = [
+    ("GeoTIFF", "GeoTIFF raster"),
+    ("WorldImage", "Image with world file"),
+    ("ImageMosaic", "Image mosaic"),
+]
+
 
 async def test_connection(conn: Connection, timeout: float = 10.0) -> ConnectionResult:
     """Test a GeoServer connection by querying the REST API.

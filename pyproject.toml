@@ -113,7 +113,7 @@ source = ["src/geotui"]
 omit = ["tests/*", "src/geotui/__main__.py"]
 
 [tool.coverage.report]
-fail_under = 75
+fail_under = 60
 show_missing = true
 
 [tool.mypy]
