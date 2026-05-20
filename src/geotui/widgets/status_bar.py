@@ -2,8 +2,8 @@
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Static
 from textual.widget import Widget
+from textual.widgets import Static
 
 from geotui.i18n import _
 

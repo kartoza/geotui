@@ -13,37 +13,54 @@ repos:
       - id: check-json
       - id: mixed-line-ending
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+  # Use local hooks so they match CI exactly via nix-provided tools
+  - repo: local
     hooks:
-      - id: ruff
-        args: [--fix]
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check --force-exclude
+        language: system
+        types: [python]
+
       - id: ruff-format
+        name: ruff format
+        entry: ruff format --check --force-exclude
+        language: system
+        types: [python]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.14.1
-    hooks:
       - id: mypy
-        additional_dependencies:
-          - textual
-          - pydantic
-          - httpx
-        args: [--ignore-missing-imports]
+        name: mypy
+        entry: mypy --ignore-missing-imports
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: ['src/']
 
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.3
-    hooks:
       - id: bandit
-        args: ['-c', 'pyproject.toml', '-r', 'src/']
-        additional_dependencies: ['bandit[toml]']
+        name: bandit
+        entry: bandit -c pyproject.toml -r
+        language: system
+        pass_filenames: false
+        args: ['src/']
 
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
-    hooks:
       - id: codespell
-        args: ['--skip', '*.po,*.pot,*.mo']
+        name: codespell
+        entry: codespell --skip '*.po,*.pot,*.mo,*.lock'
+        language: system
+        types: [text]
 
-  - repo: https://github.com/fsfe/reuse-tool
-    rev: v5.0.2
-    hooks:
-      - id: reuse
+      - id: pytest
+        name: pytest
+        entry: pytest --no-header -q
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: docs-build
+        name: docs build
+        entry: bash -c 'cd docs && mkdocs build --strict'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

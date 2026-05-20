@@ -237,9 +237,7 @@ class SettingsScreen(Screen[None]):
                     yield Label(_("Password"), classes="field-label")
                     yield Static("", id="view-password", classes="field-value-password")
                     with Horizontal(id="form-buttons"):
-                        yield Button(
-                            _("Edit"), id="btn-edit", classes="btn-primary"
-                        )
+                        yield Button(_("Edit"), id="btn-edit", classes="btn-primary")
                         yield Button(
                             _("Connect"), id="btn-connect", classes="btn-success"
                         )
@@ -258,9 +256,7 @@ class SettingsScreen(Screen[None]):
                         placeholder=_("Password"), id="input-password", password=True
                     )
                     with Horizontal(id="form-buttons"):
-                        yield Button(
-                            _("Save"), id="btn-save", classes="btn-success"
-                        )
+                        yield Button(_("Save"), id="btn-save", classes="btn-success")
                         yield Button(
                             _("Cancel"), id="btn-cancel", classes="btn-default"
                         )
@@ -385,10 +381,13 @@ class SettingsScreen(Screen[None]):
             return
         conn = self._config.get_connection(self.selected_id)
         if conn:
-            self._do_test_connection(conn)
+            self.run_worker(self._do_test_connection(conn), exit_on_error=False)
 
     async def _do_test_connection(self, conn: Connection) -> None:
-        """Run the async connection test.
+        """Test and activate the connection.
+
+        Tests credentials via GeoServer REST API. On success, sets
+        this connection as active and updates the main dual pane.
 
         Args:
             conn: Connection to test.
@@ -399,6 +398,18 @@ class SettingsScreen(Screen[None]):
         result = await test_connection(conn)
         if result.success:
             self.notify(result.message, severity="information")
+            # Mark this connection as active, deactivate others
+            for c in self._config.config.connections:
+                c.is_active = c.id == conn.id
+            self._config.save()
+            # Update the dual pane with the active connection
+            from geotui.widgets.dual_pane import DualPane
+
+            try:
+                dual_pane = self.app.query_one(DualPane)
+                dual_pane.set_connection(conn)
+            except Exception:  # nosec B110
+                self.log.warning("Could not update dual pane")
         else:
             self.notify(result.message, severity="error")
 
@@ -435,9 +446,9 @@ class SettingsScreen(Screen[None]):
             self.notify(f"{name} added", severity="information")
 
         self._refresh_list()
-        conn = self._config.get_connection(self.selected_id)
-        if conn:
-            self._show_connection_detail(conn)
+        saved_conn = self._config.get_connection(self.selected_id)
+        if saved_conn:
+            self._show_connection_detail(saved_conn)
 
     def _cancel_edit(self) -> None:
         """Cancel editing and return to view or empty mode."""

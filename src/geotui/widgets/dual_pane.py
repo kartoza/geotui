@@ -5,11 +5,17 @@ from textual.containers import Horizontal
 from textual.reactive import reactive
 from textual.widget import Widget
 
+from geotui.config import Connection
 from geotui.widgets.file_pane import FilePane
+from geotui.widgets.geoserver_tree import GeoServerTree
 
 
 class DualPane(Widget):
-    """A dual-pane file manager widget in the style of Midnight Commander."""
+    """A dual-pane widget in the style of Midnight Commander.
+
+    Left pane: local file browser.
+    Right pane: GeoServer resource tree from active connection.
+    """
 
     DEFAULT_CSS = """
     DualPane {
@@ -28,8 +34,8 @@ class DualPane(Widget):
     def compose(self) -> ComposeResult:
         """Compose dual pane layout."""
         with Horizontal():
-            yield FilePane(id="left-pane", pane_title="Left")
-            yield FilePane(id="right-pane", pane_title="Right")
+            yield FilePane(id="left-pane", pane_title="Local Files")
+            yield GeoServerTree(id="right-pane")
 
     def on_mount(self) -> None:
         """Set initial focus to left pane."""
@@ -46,7 +52,7 @@ class DualPane(Widget):
     def _update_active_pane(self) -> None:
         """Update visual state of panes."""
         left = self.query_one("#left-pane", FilePane)
-        right = self.query_one("#right-pane", FilePane)
+        right = self.query_one("#right-pane", GeoServerTree)
 
         left.is_active = self.active_pane == "left"
         right.is_active = self.active_pane == "right"
@@ -55,3 +61,12 @@ class DualPane(Widget):
             left.focus()
         else:
             right.focus()
+
+    def set_connection(self, conn: Connection | None) -> None:
+        """Set the active GeoServer connection for the right pane.
+
+        Args:
+            conn: Connection to display, or None to clear.
+        """
+        right = self.query_one("#right-pane", GeoServerTree)
+        right.connection = conn

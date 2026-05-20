@@ -33,6 +33,7 @@
             pythonPkgs.hatchling
             pythonPkgs.ruff
             pythonPkgs.mypy
+            pythonPkgs.bandit
 
             # Docs
             pythonPkgs.mkdocs
@@ -43,20 +44,26 @@
             pkgs.pre-commit
             pkgs.gh
             pkgs.gettext
+            pkgs.codespell
           ];
 
           shellHook = ''
-            echo "Welcome to GeoTUI development environment"
-            echo "  Run: python -m geotui"
-            echo "  Test: pytest"
-            echo "  Docs: mkdocs serve"
+            echo "GeoTUI development environment"
+            echo "  Run:      python -m geotui"
+            echo "  Test:     pytest"
+            echo "  Lint:     ruff check src/ tests/"
+            echo "  Format:   ruff format src/ tests/"
+            echo "  Types:    mypy src/ --ignore-missing-imports"
+            echo "  Security: bandit -r src/ -c pyproject.toml"
+            echo "  Docs:     cd docs && mkdocs serve"
+            echo "  CI local: ./scripts/ci-local.sh"
             export PYTHONPATH="$PWD/src:$PYTHONPATH"
           '';
         };
 
         packages.default = pythonPkgs.buildPythonPackage {
           pname = "geotui";
-          version = "0.1.0";
+          version = "0.3.0";
           src = ./.;
           format = "pyproject";
 

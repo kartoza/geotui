@@ -9,8 +9,8 @@ from pathlib import Path
 
 SUPPORTED_LANGUAGES = {
     "en": "English",
-    "pt": "Portugues",
-    "es": "Espanol",
+    "pt": "Portuguese",
+    "es": "Spanish",
 }
 
 _LOCALE_DIR = Path(__file__).parent / "locales"

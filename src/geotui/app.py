@@ -59,6 +59,14 @@ class GeoTUIApp(App[None]):
         yield StatusBar()
         yield Footer()
 
+    def on_mount(self) -> None:
+        """Restore active connection on startup."""
+        for conn in self.config_manager.config.connections:
+            if conn.is_active:
+                dual_pane = self.query_one(DualPane)
+                dual_pane.set_connection(conn)
+                break
+
     def action_switch_pane(self) -> None:
         """Switch focus between left and right panes."""
         dual_pane = self.query_one(DualPane)

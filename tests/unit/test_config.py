@@ -146,9 +146,7 @@ class TestConfigManager:
         assert found is not None
         assert found.id == conn.id
 
-    def test_get_connection_by_name_not_found(
-        self, tmp_config: ConfigManager
-    ) -> None:
+    def test_get_connection_by_name_not_found(self, tmp_config: ConfigManager) -> None:
         """Test getting a non-existent connection by name returns None."""
         assert tmp_config.get_connection_by_name("nope") is None
 
