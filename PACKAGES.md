@@ -10,6 +10,8 @@
 | **pydantic** | >=2.0.0 | Data validation and settings management |
 | **pydantic-settings** | >=2.0.0 | Configuration management with environment variable support |
 | **keyring** | >=25.0.0 | Secure credential storage using system keyring |
+| **fpdf2** | >=2.8.0 | Lightweight PDF generation for publish reports |
+| **click** | >=8.0.0 | CLI framework for publish, export, import-config subcommands |
 
 ## Development Dependencies
 
@@ -39,6 +41,14 @@
 | Package | Version | Purpose |
 |---------|---------|---------|
 | **babel** | >=2.16.0 | Translation extraction and compilation tools |
+
+## Application Modules
+
+| Module | Purpose |
+|--------|---------|
+| **publisher.py** | Shapefile discovery, ZIP bundling, concurrent upload engine with retry |
+| **report.py** | PDF and JSON report generation with Kartoza+GeoTUI branding |
+| **cli.py** | Click CLI with publish, export, import-config subcommands |
 
 ## System Dependencies (via Nix)
 

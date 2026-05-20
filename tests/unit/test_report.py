@@ -57,7 +57,7 @@ def sample_report() -> PublishReport:
 class TestJsonReport:
     def test_generates_valid_json(
         self, sample_report: PublishReport, tmp_path: Path
-    ) -> None:  # noqa: E501
+    ) -> None:
         path = tmp_path / "report.json"
         generate_json_report(sample_report, path)
         assert path.exists()
@@ -68,7 +68,7 @@ class TestJsonReport:
 
     def test_json_contains_all_results(
         self, sample_report: PublishReport, tmp_path: Path
-    ) -> None:  # noqa: E501
+    ) -> None:
         path = tmp_path / "report.json"
         generate_json_report(sample_report, path)
         data = json.loads(path.read_text())
@@ -76,7 +76,7 @@ class TestJsonReport:
 
     def test_json_contains_config(
         self, sample_report: PublishReport, tmp_path: Path
-    ) -> None:  # noqa: E501
+    ) -> None:
         path = tmp_path / "report.json"
         generate_json_report(sample_report, path)
         data = json.loads(path.read_text())
@@ -85,7 +85,7 @@ class TestJsonReport:
 
     def test_json_redacts_password(
         self, sample_report: PublishReport, tmp_path: Path
-    ) -> None:  # noqa: E501
+    ) -> None:
         path = tmp_path / "report.json"
         generate_json_report(sample_report, path)
         content = path.read_text()
@@ -95,7 +95,7 @@ class TestJsonReport:
 class TestPdfReport:
     def test_generates_pdf_file(
         self, sample_report: PublishReport, tmp_path: Path
-    ) -> None:  # noqa: E501
+    ) -> None:
         path = tmp_path / "report.pdf"
         generate_pdf_report(sample_report, path)
         assert path.exists()
@@ -103,7 +103,7 @@ class TestPdfReport:
 
     def test_pdf_starts_with_header(
         self, sample_report: PublishReport, tmp_path: Path
-    ) -> None:  # noqa: E501
+    ) -> None:
         path = tmp_path / "report.pdf"
         generate_pdf_report(sample_report, path)
         content = path.read_bytes()
@@ -112,7 +112,7 @@ class TestPdfReport:
     def test_pdf_with_empty_results(self, tmp_path: Path) -> None:
         cfg = PublishConfig(
             workspace="ws", datastore="ds", source_directory=Path("/empty")
-        )  # noqa: E501
+        )
         report = PublishReport(config=cfg)
         path = tmp_path / "report.pdf"
         generate_pdf_report(report, path)
