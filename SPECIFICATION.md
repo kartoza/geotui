@@ -202,15 +202,16 @@ graph TB
 - Empty state shows "No connection active" message
 - Refresh capability for reloading tree data
 
-### FR-008: Bulk Shapefile Publishing
-- Discover shapefile bundles from source directory (.shp + .shx + .dbf)
-- Layer naming strategies: basename, prefixed_basename, path_slug
-- Name collision detection before upload
+### FR-008: F5 Copy-to-Publish
+- Midnight Commander F5 paradigm: select folder left, workspace/store right, F5
+- Multi-format discovery: Shapefile, GeoPackage (.gpkg), GeoTIFF (.tif/.tiff)
+- Auto-creates one store per format type (e.g. folder_shapefiles, folder_geotiff)
 - Concurrent upload bounded by configurable concurrency (default: 4)
 - Retry with exponential backoff on transient failures
 - Idempotent: create new layers or update existing ones
-- Dry-run mode validates without modifying GeoServer
-- Workspace and datastore auto-creation
+- Progress in status bar + tree auto-refreshes as layers appear
+- PDF + JSON report generated automatically after every publish
+- Layer naming via basename strategy, collision detection before upload
 
 ### FR-009: Publish Reports
 - PDF report with Kartoza + GeoTUI dual branding
@@ -218,6 +219,7 @@ graph TB
 - Handles 4000+ rows with paginated tables and repeating headers
 - JSON report alongside PDF for programmatic consumption
 - Reports saved to ~/.local/share/geotui/reports/
+- Generated automatically after every F5 copy operation
 
 ### FR-010: CLI Interface
 - `geotui publish` for headless/CI bulk publishing
@@ -226,16 +228,11 @@ graph TB
 - Uses saved connections from config.json
 - Progress output and summary on completion
 
-### FR-011: F2 Context Menu Extensions
-- "Bulk Publish Shapefiles" action in GeoServer pane menu
-- Inline configuration form (workspace, datastore, source, naming, concurrency)
-- Progress indicator during upload
-- Summary notification with report path on completion
-
 ## 6. Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.5.0 | 2026-05-21 | F5 copy-to-publish, multi-format support, replaces F2 bulk publish |
 | 0.4.0 | 2026-05-20 | Bulk shapefile publisher, PDF/JSON reports, CLI interface |
 | 0.3.0 | 2026-05-19 | GeoServer resource tree in right pane, full REST API client |
 | 0.2.0 | 2026-05-19 | Connection management, settings screen, GeoServer API client |
