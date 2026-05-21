@@ -50,21 +50,15 @@ class GeoTUIApp(App[None]):
     def compose(self) -> ComposeResult:
         """Compose the application layout."""
         yield Header(show_clock=True)
-        yield DualPane()
+        yield DualPane(config_manager=self.config_manager)
         yield StatusBar()
         yield Footer()
 
     def on_mount(self) -> None:
-        """Show splash screen and restore active connection on startup."""
+        """Show splash screen on startup."""
         from geotui.screens.splash import SplashScreen
 
         self.push_screen(SplashScreen())
-
-        for conn in self.config_manager.config.connections:
-            if conn.is_active:
-                dual_pane = self.query_one(DualPane)
-                dual_pane.set_connection(conn)
-                break
 
     def action_switch_pane(self) -> None:
         """Switch focus between left and right panes."""
@@ -115,7 +109,7 @@ class GeoTUIApp(App[None]):
         from geotui.widgets.geoserver_tree import GeoServerTree
 
         tree = self.query_one("#right-pane", GeoServerTree)
-        if tree.connection is None:
+        if not tree._connections:
             self.notify(
                 _("Connect to a GeoServer first (F9)"),
                 severity="error",

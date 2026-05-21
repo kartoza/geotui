@@ -402,14 +402,14 @@ class SettingsScreen(Screen[None]):
             for c in self._config.config.connections:
                 c.is_active = c.id == conn.id
             self._config.save()
-            # Update the dual pane with the active connection
-            from geotui.widgets.dual_pane import DualPane
+            # Refresh the tree to pick up the new connection state
+            from geotui.widgets.geoserver_tree import GeoServerTree
 
             try:
-                dual_pane = self.app.query_one(DualPane)
-                dual_pane.set_connection(conn)
+                tree = self.app.query_one("#right-pane", GeoServerTree)
+                tree.refresh_connections()
             except Exception:
-                self.log.warning("Could not update dual pane")
+                self.log.warning("Could not update GeoServer tree")
         else:
             self.notify(result.message, severity="error")
 
