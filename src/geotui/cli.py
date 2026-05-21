@@ -84,7 +84,7 @@ def publish(
 
     report = asyncio.run(run_publish(conn, config, progress_callback=progress))
 
-    out_dir = Path(output) if output else Path.home() / ".local/share/geotui/reports"
+    out_dir = Path(output) if output else Path.cwd() / ".geotui" / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
     pdf_path = out_dir / f"publish-{ts}.pdf"

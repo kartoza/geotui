@@ -28,11 +28,38 @@ GeoTUI is a terminal user interface (TUI) application for managing GeoServer ins
 - **Midnight Commander Layout** - Dual-pane interface with rounded borders
 - **Kartoza Branded** - Beautiful color scheme with yellow/orange, blue, teal, and grey accents
 - **Cross-Platform** - Runs on Windows, Linux, and macOS
+- **Project-Local Config** - Config and reports stored in `.geotui/` within your working directory
 - **Internationalization** - English, Portuguese, and Spanish (switchable with Ctrl+L)
 - **Secure by Design** - Keyring-based credential storage, HTTPS by default
 - **Keyboard-Driven** - Full function key bindings just like MC
 
 ## Installation
+
+### Standalone Binary (no Python required)
+
+Download and copy the binary to your PATH:
+
+```bash
+# Build the standalone binary
+make standalone
+
+# Install to /usr/local/bin so it's available everywhere
+make install-bin
+```
+
+Or manually:
+
+```bash
+sudo cp dist/geotui /usr/local/bin/geotui
+```
+
+### Using pipx (recommended for Python users)
+
+```bash
+make install
+# or:
+pipx install .
+```
 
 ### From PyPI
 
@@ -40,10 +67,15 @@ GeoTUI is a terminal user interface (TUI) application for managing GeoServer ins
 pip install geotui
 ```
 
-### Using Nix
+### Using Nix / NixOS
 
 ```bash
+# Run directly without installing
 nix run github:kartoza/geotui
+
+# Or build locally
+make nix-build
+./result/bin/geotui
 ```
 
 ### From Source
@@ -57,9 +89,31 @@ python -m geotui
 
 ## Quick Start
 
+Run `geotui` from your project directory:
+
 ```bash
+cd /path/to/your/geodata
 geotui
 ```
+
+The file pane opens at your current directory. Config and reports are saved to `.geotui/` inside your working directory, so each project keeps its own GeoServer connections and publish logs.
+
+## Makefile Reference
+
+| Command | Description |
+|---|---|
+| `make install` | Install via pipx (globally available) |
+| `make install-bin` | Build standalone binary and copy to `/usr/local/bin` |
+| `make standalone` | Build standalone binary to `dist/geotui` |
+| `make nix-build` | Build via Nix flake (for NixOS) |
+| `make nix-run` | Run directly via Nix (for NixOS) |
+| `make build` | Build wheel and source distribution |
+| `make install-dev` | Install in editable mode for development |
+| `make test` | Run test suite |
+| `make lint` | Run ruff linter |
+| `make format` | Format code |
+| `make docs` | Serve documentation locally |
+| `make clean` | Remove build artifacts |
 
 ## Key Bindings
 
@@ -68,13 +122,26 @@ geotui
 | `Tab` | Switch between panes |
 | `F1` | Help |
 | `F2` | Menu |
-| `F5` | Copy |
+| `F5` | Copy / Publish to GeoServer |
 | `F6` | Move |
 | `F7` | Create directory |
 | `F8` | Delete |
 | `F9` | Settings |
 | `F10` / `q` | Quit |
 | `Ctrl+L` | Cycle language |
+
+## Project-Local Configuration
+
+GeoTUI stores all config and reports relative to where you run it:
+
+```
+your-project/
+└── .geotui/
+    ├── config.json      # GeoServer connections for this project
+    └── reports/         # Publish reports (PDF + JSON)
+```
+
+Add `.geotui/` to your `.gitignore` to keep credentials out of version control.
 
 ## Development
 

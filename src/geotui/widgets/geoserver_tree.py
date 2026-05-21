@@ -444,7 +444,7 @@ class GeoServerTree(Widget):
             from datetime import datetime, timezone
 
             ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
-            out_dir = Path.home() / ".local/share/geotui/reports"
+            out_dir = Path.cwd() / ".geotui" / "reports"
             pdf_path = out_dir / f"publish-{ts}.pdf"
             json_path = out_dir / f"publish-{ts}.json"
 

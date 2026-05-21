@@ -54,7 +54,7 @@ class FilePane(Widget):
     """
 
     is_active: reactive[bool] = reactive(False)
-    current_path: reactive[str] = reactive(str(Path.home()))
+    current_path: reactive[str] = reactive(str(Path.cwd()))
 
     def __init__(
         self,

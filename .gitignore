@@ -52,3 +52,5 @@ Thumbs.db
 .env
 .env.local
 claude.sh
+
+.venv
