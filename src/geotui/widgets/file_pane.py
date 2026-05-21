@@ -1,5 +1,7 @@
 """File pane widget - individual pane in the dual-pane layout."""
 
+import platform
+import subprocess
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -111,3 +113,32 @@ class FilePane(Widget):
     ) -> None:
         """Handle directory selection."""
         self.current_path = str(event.path)
+
+    def on_directory_tree_file_selected(
+        self, event: DirectoryTree.FileSelected
+    ) -> None:
+        """Open file with system default viewer."""
+        self.open_file(event.path)
+
+    @staticmethod
+    def open_file(path: Path) -> None:
+        """Open a file with the system default application.
+
+        Cross-platform: uses xdg-open (Linux), open (macOS),
+        or start (Windows).
+
+        Args:
+            path: Path to the file to open.
+        """
+        system = platform.system()
+        cmd: list[str] = []
+        if system == "Darwin":
+            cmd = ["open", str(path)]
+        elif system == "Windows":
+            cmd = ["cmd", "/c", "start", "", str(path)]
+        else:
+            cmd = ["xdg-open", str(path)]
+        try:
+            subprocess.Popen(cmd)  # noqa: S603
+        except FileNotFoundError:
+            pass

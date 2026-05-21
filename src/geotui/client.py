@@ -228,6 +228,8 @@ class GeoServerClient:
         self._auth = httpx.BasicAuth(conn.username, conn.password)
         self._resolved = False
         self._client: httpx.AsyncClient | None = None
+        self._last_response_text = ""
+        self._last_status_code = 0
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Get or create the shared HTTP client."""
@@ -606,8 +608,12 @@ class GeoServerClient:
                 auth=self._auth,
                 headers={"Content-Type": content_type},
             )
+            self._last_response_text = response.text[:1024]
+            self._last_status_code = response.status_code
             return response.status_code
-        except httpx.RequestError:
+        except httpx.RequestError as e:
+            self._last_response_text = str(e)
+            self._last_status_code = 0
             return 0
 
     async def _put_json(self, path: str, json_data: dict[str, Any]) -> bool:

@@ -95,8 +95,20 @@ class GeoTUIApp(App[None]):
                 tree.refresh_tree()
             elif action_id == "local_mkdir":
                 self.action_mkdir()
+            elif action_id == "local_open_reports":
+                self._open_reports_folder()
 
         self.push_screen(ContextMenuScreen(active), callback=handle_menu_result)
+
+    def _open_reports_folder(self) -> None:
+        """Open the reports folder in the system file manager."""
+        from pathlib import Path
+
+        from geotui.widgets.file_pane import FilePane
+
+        reports_dir = Path.home() / ".local/share/geotui/reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        FilePane.open_file(reports_dir)
 
     def action_copy(self) -> None:
         """F5 Copy: publish local spatial files to GeoServer."""

@@ -691,19 +691,10 @@ async def _ensure_datastore(
                 f"type '{store_type}'. Expected one of {sorted(compatible)}."
             )
             return False
-        return True
-
-    # Datastore does not exist - create a Shapefile directory store.
-    logger.info("Creating datastore '%s'", config.datastore)
-    created = await client.create_datastore(
-        workspace=config.workspace,
-        name=config.datastore,
-        store_type="Directory of spatial files (shapefiles)",
-        params={"url": f"file:data/{config.datastore}"},
-    )
-    if not created:
-        report.warnings.append(f"Failed to create datastore '{config.datastore}'")
-        return False
+    # If the datastore doesn't exist yet, GeoServer will auto-create it
+    # when the first shapefile ZIP is uploaded via the file.shp endpoint.
+    # Pre-creating a "Directory of spatial files" store causes HTTP 500
+    # because it conflicts with the file upload mechanism.
     return True
 
 
@@ -737,7 +728,7 @@ async def _upload_bundle(
     Raises:
         RuntimeError: If *config.fail_fast* is ``True`` and the upload fails.
     """
-    source_path = bundle.directory / f"{bundle.name}.shp"
+    source_path = str(bundle.directory / f"{bundle.name}.shp")
 
     async with semaphore:
         if callable(progress_callback):
@@ -768,7 +759,10 @@ async def _upload_bundle(
                         upload_time=elapsed,
                     )
 
-                last_error = "Upload returned failure status"
+                last_error = (
+                    f"HTTP {client._last_status_code}: "
+                    f"{client._last_response_text[:200]}"
+                )
 
             except Exception as exc:
                 last_error = str(exc)
