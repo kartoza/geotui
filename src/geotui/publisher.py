@@ -536,6 +536,22 @@ async def run_publish(
                 return layer_name
         return None
 
+    # Build BundleResult entries for skipped (incomplete) bundles from warnings.
+    skipped_results: list[BundleResult] = []
+    for warning_msg in disc_warnings:
+        name = ""
+        if "'" in warning_msg:
+            name = warning_msg.split("'")[1]
+        skipped_results.append(
+            BundleResult(
+                layer_name=name,
+                source_path=Path(name),
+                action="skip",
+                status="skipped",
+                error=warning_msg,
+            )
+        )
+
     # Dry-run: return DRY_RUN results immediately without touching GeoServer.
     if config.dry_run:
         results = [
@@ -547,6 +563,7 @@ async def run_publish(
             )
             for bundle, layer_name in name_map.items()
         ]
+        results.extend(skipped_results)
         report = PublishReport(
             config=config,
             geoserver_url=conn.url,
@@ -571,6 +588,7 @@ async def run_publish(
             )
             for bundle, layer_name in name_map.items()
         ]
+        results.extend(skipped_results)
         report = PublishReport(
             config=config,
             geoserver_url=conn.url,
@@ -627,6 +645,9 @@ async def run_publish(
                 logger.exception("Unexpected error in upload task: %s", outcome)
             else:
                 report.results.append(outcome)
+
+        # Append skipped (incomplete) bundles so they appear in the report.
+        report.results.extend(skipped_results)
 
     report.wall_clock_seconds = time.monotonic() - start
     return report

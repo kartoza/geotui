@@ -14,6 +14,10 @@ from textual.widgets import DirectoryTree, Label, Static
 class FilePane(Widget):
     """A single file browser pane with directory tree and details."""
 
+    BINDINGS = [
+        ("backspace", "go_up", "Parent Dir"),
+    ]
+
     DEFAULT_CSS = """
     FilePane {
         width: 1fr;
@@ -107,6 +111,26 @@ class FilePane(Widget):
                 return node_path
             return node_path.parent
         return Path(self.current_path)
+
+    def action_go_up(self) -> None:
+        """Navigate to the parent directory."""
+        current = Path(self.current_path)
+        parent = current.parent
+        if parent != current:
+            self.navigate_to(parent)
+
+    def navigate_to(self, path: Path) -> None:
+        """Navigate the tree to a new root directory.
+
+        Args:
+            path: Directory to navigate to.
+        """
+        if not path.is_dir():
+            return
+        self.current_path = str(path)
+        tree = self.query_one(DirectoryTree)
+        tree.path = path
+        tree.reload()
 
     def on_directory_tree_directory_selected(
         self, event: DirectoryTree.DirectorySelected

@@ -128,9 +128,13 @@ class TestPublishRunner:
             dry_run=True,
         )
         report = await run_publish(conn, cfg)
-        assert all(r.status == "DRY_RUN" for r in report.results)
+        dry_run_results = [r for r in report.results if r.status == "DRY_RUN"]
+        skipped_results = [r for r in report.results if r.status == "skipped"]
+        assert len(dry_run_results) == 2
+        assert len(skipped_results) == 1  # incomplete 'broken' bundle
+        assert skipped_results[0].layer_name == "broken"
         assert report.created == 0
-        assert len(report.results) == 2
+        assert len(report.results) == 3
 
     @pytest.mark.asyncio
     async def test_bundle_zip_creation(self, shapefile_dir: Path) -> None:
