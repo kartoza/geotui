@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=GeoTUI
+Comment=Midnight Commander-style TUI for GeoServer management
+Exec=geotui
+Icon=com.kartoza.GeoTUI
+Terminal=true
+Type=Application
+Categories=Science;Geography;Network;
