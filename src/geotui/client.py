@@ -785,6 +785,90 @@ class GeoServerClient:
             },
         )
 
+    # ── Delete operations ──────────────────────────────────
+
+    async def _delete(self, path: str) -> bool:
+        """Make an authenticated DELETE request.
+
+        Args:
+            path: API path relative to base URL.
+
+        Returns:
+            True if the request returned 200 OK.
+        """
+        client = await self._ensure_client()
+        try:
+            response = await client.delete(
+                f"{self._base_url}{path}",
+                auth=self._auth,
+            )
+            return response.status_code == 200
+        except httpx.RequestError:
+            return False
+
+    async def delete_datastore(
+        self, workspace: str, store: str, recurse: bool = False
+    ) -> bool:
+        """Delete a datastore.
+
+        Args:
+            workspace: Workspace name.
+            store: Datastore name.
+            recurse: If True, also delete contained layers.
+
+        Returns:
+            True if deleted successfully.
+        """
+        path = f"/rest/workspaces/{workspace}/datastores/{store}"
+        if recurse:
+            path += "?recurse=true"
+        return await self._delete(path)
+
+    async def delete_coveragestore(
+        self, workspace: str, store: str, recurse: bool = False
+    ) -> bool:
+        """Delete a coverage store.
+
+        Args:
+            workspace: Workspace name.
+            store: Coverage store name.
+            recurse: If True, also delete contained coverages.
+
+        Returns:
+            True if deleted successfully.
+        """
+        path = f"/rest/workspaces/{workspace}/coveragestores/{store}"
+        if recurse:
+            path += "?recurse=true"
+        return await self._delete(path)
+
+    async def delete_workspace(self, workspace: str, recurse: bool = False) -> bool:
+        """Delete a workspace.
+
+        Args:
+            workspace: Workspace name.
+            recurse: If True, also delete all contained stores and layers.
+
+        Returns:
+            True if deleted successfully.
+        """
+        path = f"/rest/workspaces/{workspace}"
+        if recurse:
+            path += "?recurse=true"
+        return await self._delete(path)
+
+    async def delete_layer(self, workspace: str, layer_name: str) -> bool:
+        """Delete a layer.
+
+        Args:
+            workspace: Workspace name.
+            layer_name: Layer name.
+
+        Returns:
+            True if deleted successfully.
+        """
+        return await self._delete(f"/rest/layers/{workspace}:{layer_name}")
+
 
 async def test_connection(conn: Connection, timeout: float = 10.0) -> ConnectionResult:
     """Test a GeoServer connection by querying the REST API.

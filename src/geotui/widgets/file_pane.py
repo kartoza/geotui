@@ -89,11 +89,21 @@ class FilePane(Widget):
             footer.update(value)
 
     def get_selected_path(self) -> Path:
-        """Get the currently selected/displayed directory path.
+        """Get the path of the highlighted item in the tree.
+
+        If the cursor is on a directory, returns that directory.
+        If on a file, returns its parent directory.
+        Falls back to current_path if no cursor node.
 
         Returns:
-            The current directory path.
+            Path to the selected directory.
         """
+        tree = self.query_one(DirectoryTree)
+        if tree.cursor_node and tree.cursor_node.data:
+            node_path = tree.cursor_node.data.path
+            if node_path.is_dir():
+                return node_path
+            return node_path.parent
         return Path(self.current_path)
 
     def on_directory_tree_directory_selected(

@@ -120,8 +120,17 @@ class GeoTUIApp(App[None]):
         self.notify(_("Create Directory"), title=_("GeoTUI"))
 
     def action_delete(self) -> None:
-        """Delete selected item."""
-        self.notify(_("Delete"), title=_("GeoTUI"))
+        """F8 Delete: delete selected resource on GeoServer."""
+        from geotui.widgets.geoserver_tree import GeoServerTree
+
+        dual_pane = self.query_one(DualPane)
+        pane_type = dual_pane.get_active_pane_type()
+
+        if pane_type == "geoserver":
+            tree = self.query_one("#right-pane", GeoServerTree)
+            tree.action_delete_selected()
+        else:
+            self.notify(_("Delete not implemented for local files"), severity="warning")
 
     def action_settings(self) -> None:
         """Show settings screen."""

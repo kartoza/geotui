@@ -459,6 +459,90 @@ class GeoServerTree(Widget):
             self.app.notify(summary, severity="information", timeout=10)
             self._hide_action_panel()
 
+    def action_delete_selected(self) -> None:
+        """Delete the selected resource after confirmation."""
+        if not self.connection:
+            self.app.notify(_("No connection active"), severity="warning")
+            return
+
+        tree = self.query_one("#gs-tree", Tree)
+        if not tree.cursor_node or not tree.cursor_node.data:
+            self.app.notify(_("Select a resource to delete"), severity="warning")
+            return
+
+        data = tree.cursor_node.data
+        if not isinstance(data, GeoServerResource):
+            return
+
+        resource_type = data.resource_type
+        name = data.name
+
+        # Find parent workspace for stores/layers
+        ws_name = self._get_selected_workspace()
+        if not ws_name and resource_type != "workspace":
+            self.app.notify(_("Cannot determine workspace"), severity="error")
+            return
+
+        from geotui.screens.confirm import ConfirmScreen
+
+        if resource_type == "workspace":
+            msg = f"Delete workspace '{name}' and ALL its stores and layers?"
+        elif resource_type in ("datastore", "coveragestore", "wmsstore"):
+            msg = (
+                f"Delete {resource_type} '{name}' and all its "
+                f"layers in workspace '{ws_name}'?"
+            )
+        elif resource_type in ("layer", "coverage"):
+            msg = f"Delete layer '{name}' from workspace '{ws_name}'?"
+        else:
+            self.app.notify(
+                _("Cannot delete this resource type"),
+                severity="warning",
+            )
+            return
+
+        def handle_confirm(confirmed: bool) -> None:
+            if confirmed:
+                self.run_worker(
+                    self._do_delete(resource_type, name, ws_name or ""),
+                    exit_on_error=False,
+                )
+
+        self.app.push_screen(
+            ConfirmScreen(_("Confirm Delete"), msg),
+            callback=handle_confirm,
+        )
+
+    async def _do_delete(self, resource_type: str, name: str, workspace: str) -> None:
+        """Execute the delete operation.
+
+        Args:
+            resource_type: Type of resource to delete.
+            name: Resource name.
+            workspace: Parent workspace name.
+        """
+        if self.connection is None:
+            return
+
+        async with GeoServerClient(self.connection) as client:
+            if resource_type == "workspace":
+                ok = await client.delete_workspace(name, recurse=True)
+            elif resource_type == "datastore":
+                ok = await client.delete_datastore(workspace, name, recurse=True)
+            elif resource_type == "coveragestore":
+                ok = await client.delete_coveragestore(workspace, name, recurse=True)
+            elif resource_type in ("layer", "coverage"):
+                ok = await client.delete_layer(workspace, name)
+            else:
+                ok = False
+
+        if self.is_mounted:
+            if ok:
+                self.app.notify(f"Deleted '{name}'", severity="information")
+                self.refresh_tree()
+            else:
+                self.app.notify(f"Failed to delete '{name}'", severity="error")
+
     def action_refresh(self) -> None:
         """Refresh the tree."""
         self.refresh_tree()
