@@ -98,6 +98,50 @@ class ShapefileBundle:
         return data
 
 
+@dataclass(frozen=True)
+class SpatialFile:
+    """A single spatial file (GeoPackage, GeoTIFF, etc.)."""
+
+    name: str
+    """The file stem (without extension), e.g. ``parcels``."""
+
+    path: Path
+    """Absolute path to the file."""
+
+    size: int
+    """File size in bytes."""
+
+    @classmethod
+    def from_path(cls, path: Path) -> SpatialFile:
+        """Construct a :class:`SpatialFile` from a filesystem path."""
+        return cls(name=path.stem, path=path, size=path.stat().st_size)
+
+
+@dataclass
+class SpatialFileGroup:
+    """A collection of spatial files sharing the same format type."""
+
+    format_type: str
+    """Logical format identifier, e.g. ``"shapefile"``, ``"geopackage"``,
+    ``"geotiff"``."""
+
+    store_type: str
+    """GeoServer store type string for this format."""
+
+    store_category: str
+    """Broad category used for UI grouping."""
+
+    files: list
+    """List of :class:`SpatialFile` or :class:`ShapefileBundle` instances."""
+
+    @property
+    def total_size(self) -> int:
+        """Sum of byte sizes of all files in the group."""
+        return sum(
+            f.total_size if hasattr(f, "total_size") else f.size for f in self.files
+        )
+
+
 @dataclass
 class BundleResult:
     """Outcome of publishing a single :class:`ShapefileBundle`."""
@@ -276,6 +320,86 @@ def discover_bundles(
         )
 
     return bundles, warnings
+
+
+# ---------------------------------------------------------------------------
+# Multi-format discovery constants
+# ---------------------------------------------------------------------------
+
+_GEOTIFF_EXTENSIONS: frozenset[str] = frozenset({".tif", ".tiff"})
+
+_FORMAT_STORE_MAP: dict[str, tuple[str, str]] = {
+    "shapefile": ("Directory of spatial files (shapefiles)", "vector"),
+    "geopackage": ("GeoPackage", "vector"),
+    "geotiff": ("GeoTIFF", "raster"),
+}
+
+
+def discover_spatial_files(
+    directory: Path,
+) -> tuple[list[SpatialFileGroup], list[str]]:
+    """Scan *directory* (non-recursively) for all supported spatial formats.
+
+    Discovers shapefiles (via :func:`discover_bundles`), GeoPackage (``.gpkg``),
+    and GeoTIFF (``.tif`` / ``.tiff``) files.  Results are grouped by format.
+    Empty format groups are omitted.
+
+    Parameters
+    ----------
+    directory:
+        Directory to scan (no recursion).
+
+    Returns
+    -------
+    tuple[list[SpatialFileGroup], list[str]]
+        A pair of ``(groups, warning_messages)``.  Warnings originate from
+        incomplete shapefile bundles.
+    """
+    groups: list[SpatialFileGroup] = []
+
+    # --- Shapefiles ---------------------------------------------------------
+    shp_bundles, warnings = discover_bundles(directory, recurse=False)
+    if shp_bundles:
+        store_type, category = _FORMAT_STORE_MAP["shapefile"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="shapefile",
+                store_type=store_type,
+                store_category=category,
+                files=list(shp_bundles),
+            )
+        )
+
+    # --- GeoPackage ---------------------------------------------------------
+    gpkg_files = sorted(directory.glob("*.gpkg"))
+    if gpkg_files:
+        store_type, category = _FORMAT_STORE_MAP["geopackage"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="geopackage",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in gpkg_files],
+            )
+        )
+
+    # --- GeoTIFF ------------------------------------------------------------
+    tif_files: list[Path] = []
+    for ext in sorted(_GEOTIFF_EXTENSIONS):
+        tif_files.extend(directory.glob(f"*{ext}"))
+    tif_files.sort()
+    if tif_files:
+        store_type, category = _FORMAT_STORE_MAP["geotiff"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="geotiff",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in tif_files],
+            )
+        )
+
+    return groups, warnings
 
 
 # ---------------------------------------------------------------------------
