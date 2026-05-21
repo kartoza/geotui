@@ -1,5 +1,7 @@
 """Dual pane widget - the core Midnight Commander-style layout."""
 
+from typing import Any
+
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 from textual.reactive import reactive
@@ -31,7 +33,7 @@ class DualPane(Widget):
 
     active_pane: reactive[str] = reactive("left")
 
-    def __init__(self, config_manager: ConfigManager, **kwargs: object) -> None:
+    def __init__(self, config_manager: ConfigManager, **kwargs: Any) -> None:
         """Initialize the dual pane.
 
         Args:

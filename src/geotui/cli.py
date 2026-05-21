@@ -10,13 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import click
+from cryptography.fernet import Fernet
 
 from geotui import __version__
 from geotui.config import ConfigManager
 from geotui.publisher import NamingStrategy, PublishConfig
 
 
-def _unlock_config(cm: ConfigManager):
+def _unlock_config(cm: ConfigManager) -> Fernet | None:
     """Prompt for the master password and unlock the vault.
 
     If the vault is not set up, prompts the user to create one.

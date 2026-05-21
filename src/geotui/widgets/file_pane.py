@@ -54,8 +54,16 @@ def is_shapefile_component(path: Path) -> bool:
 class MCDirectoryTree(DirectoryTree):
     """DirectoryTree with '..' parent directory entry like Midnight Commander."""
 
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+        disabled: bool = False,
+    ) -> None:
+        super().__init__(path, name=name, id=id, classes=classes, disabled=disabled)
         self._selected_paths: set[Path] = set()
 
     def _populate_node(self, node: TreeNode[DirEntry], content: Iterable[Path]) -> None:
@@ -63,8 +71,9 @@ class MCDirectoryTree(DirectoryTree):
         node.remove_children()
         # Add ".." entry for parent navigation (only for root node)
         if node == self.root:
-            parent = self.path.parent
-            if parent != self.path:
+            tree_path = Path(self.path) if isinstance(self.path, str) else self.path
+            parent = tree_path.parent
+            if parent != tree_path:
                 node.add("..", data=DirEntry(parent), allow_expand=False)
         for path in content:
             node.add(
@@ -91,7 +100,8 @@ class MCDirectoryTree(DirectoryTree):
             return
         path = self.cursor_node.data.path
         # Don't allow selecting ".." or directories
-        if path == self.path.parent or path.is_dir():
+        tree_path = Path(self.path) if isinstance(self.path, str) else self.path
+        if path == tree_path.parent or path.is_dir():
             return
         if path in self._selected_paths:
             self._selected_paths.discard(path)

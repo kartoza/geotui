@@ -8,7 +8,7 @@ from textual.binding import Binding
 from textual.design import ColorSystem
 from textual.widgets import Footer, Header
 
-from geotui.config import ConfigManager
+from geotui.config import ConfigManager, Connection
 from geotui.i18n import _
 from geotui.theme import KARTOZA_DARK, KARTOZA_LIGHT
 from geotui.widgets.dual_pane import DualPane
@@ -50,7 +50,7 @@ class GeoTUIApp(App[None]):
         root.setLevel(logging.DEBUG)
         root.addHandler(handler)
 
-    def decrypt_connection(self, conn) -> object:
+    def decrypt_connection(self, conn: Connection) -> Connection:
         """Return a connection with its password decrypted.
 
         Args:

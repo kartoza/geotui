@@ -363,7 +363,7 @@ class GeoServerTree(Widget):
             title.update(f"GeoServer ({count})")
             title.set_class(False, "connected")
 
-    def on_tree_node_expanded(self, event: Tree.NodeExpanded) -> None:
+    def on_tree_node_expanded(self, event: Tree.NodeExpanded[Any]) -> None:
         """Handle tree node expansion - lazy-load connection trees."""
         node = event.node
         if not node.data or not isinstance(node.data, TreeNodeData):
@@ -962,16 +962,18 @@ class GeoServerTree(Widget):
         # Find parent store name for layer deletion (walk up tree)
         store_name = ""
         if resource_type in ("layer", "coverage"):
-            parent = tree.cursor_node.parent
-            while parent:
-                if isinstance(parent.data, TreeNodeData) and parent.data.node_type in (
+            parent_node = tree.cursor_node.parent
+            while parent_node:
+                if isinstance(
+                    parent_node.data, TreeNodeData
+                ) and parent_node.data.node_type in (
                     "datastore",
                     "coveragestore",
                     "wmsstore",
                 ):
-                    store_name = parent.data.name
+                    store_name = parent_node.data.name
                     break
-                parent = parent.parent
+                parent_node = parent_node.parent
 
         def handle_confirm(confirmed: bool | None) -> None:
             if confirmed:

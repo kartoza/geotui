@@ -4,6 +4,7 @@ Single-screen layout with connection list on the left and detail/edit form
 on the right. No popups - all CRUD happens inline following the cloudbench pattern.
 """
 
+from cryptography.fernet import Fernet
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -318,7 +319,7 @@ class SettingsScreen(Screen[None]):
         edit.display = mode == "edit"
         self.editing = mode == "edit"
 
-    def _get_vault_key(self):
+    def _get_vault_key(self) -> Fernet | None:
         """Get the vault Fernet key from the app."""
         from geotui.app import GeoTUIApp
 
@@ -588,9 +589,9 @@ class SettingsScreen(Screen[None]):
             self._config.reset_vault()
             from geotui.app import GeoTUIApp
 
-            app = self.app
-            if isinstance(app, GeoTUIApp):
-                app.vault_key = None
+            geo_app = self.app
+            if isinstance(geo_app, GeoTUIApp):
+                geo_app.vault_key = None
             self.notify(
                 _("Vault reset. All connections removed."),
                 severity="warning",
@@ -599,7 +600,8 @@ class SettingsScreen(Screen[None]):
             self._refresh_list()
             self._show_mode("empty")
             # Prompt for new master password
-            app._show_vault_setup()
+            if isinstance(geo_app, GeoTUIApp):
+                geo_app._show_vault_setup()
 
         self.app.push_screen(
             ConfirmScreen(
