@@ -28,8 +28,6 @@ def _unlock_config(cm: ConfigManager):
     Returns:
         Fernet instance for decrypting credentials, or None if no vault.
     """
-    from cryptography.fernet import Fernet
-
     if not cm.has_vault:
         if not cm.config.connections:
             return None  # No connections, nothing to protect

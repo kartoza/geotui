@@ -93,17 +93,25 @@ class GeoTUIApp(App[None]):
 
     def on_mount(self) -> None:
         """Show splash screen, then unlock if needed."""
+        if self.is_headless:
+            # Skip splash and unlock in test/headless mode
+            return
         from geotui.screens.splash import SplashScreen
 
         self.push_screen(SplashScreen(), callback=self._after_splash)
 
     def _after_splash(self, _result: None = None) -> None:
-        """After splash dismisses, show unlock/setup if needed."""
+        """After splash dismisses, show unlock if needed."""
         if self.config_manager.has_vault:
             self._show_unlock()
         elif self.config_manager.config.connections:
-            # Existing connections but no vault - migrate to encrypted storage
-            self._show_vault_setup()
+            # Existing unencrypted connections - prompt to set up vault
+            self.notify(
+                _("Your credentials are not encrypted. "
+                  "Go to Settings (F9) to set up a master password."),
+                severity="warning",
+                timeout=15,
+            )
 
     def _show_unlock(self) -> None:
         """Show the unlock screen for existing vault."""

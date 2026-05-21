@@ -20,7 +20,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from pydantic import BaseModel, ConfigDict, Field
 
-
 _PBKDF2_ITERATIONS = 600_000
 
 

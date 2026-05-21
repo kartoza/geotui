@@ -12,11 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-logger = logging.getLogger("geotui.tree")
-
-if TYPE_CHECKING:
-    from geotui.publisher import SpatialFileGroup
-
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
@@ -41,6 +36,11 @@ from geotui.client import (
 from geotui.config import ConfigManager, Connection
 from geotui.i18n import _
 from geotui.theme import KARTOZA_COLORS
+
+if TYPE_CHECKING:
+    from geotui.publisher import SpatialFileGroup
+
+logger = logging.getLogger("geotui.tree")
 
 # Colors for resource types
 _COLORS = {
