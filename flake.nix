@@ -48,18 +48,24 @@
             pkgs.gh
             pkgs.gettext
             pkgs.codespell
+            pkgs.docker
+            pkgs.docker-compose
           ];
 
           shellHook = ''
             echo "GeoTUI development environment"
-            echo "  Run:      python -m geotui"
-            echo "  Test:     pytest"
-            echo "  Lint:     ruff check src/ tests/"
-            echo "  Format:   ruff format src/ tests/"
-            echo "  Types:    mypy src/ --ignore-missing-imports"
-            echo "  Security: bandit -r src/ -c pyproject.toml"
-            echo "  Docs:     cd docs && mkdocs serve"
-            echo "  CI local: ./scripts/ci-local.sh"
+            echo "  Run:        python -m geotui"
+            echo "  Test:       pytest"
+            echo "  Lint:       ruff check src/ tests/"
+            echo "  Format:     ruff format src/ tests/"
+            echo "  Types:      mypy src/ --ignore-missing-imports"
+            echo "  Security:   bandit -r src/ -c pyproject.toml"
+            echo "  Docs:       cd docs && mkdocs serve"
+            echo "  CI local:   ./scripts/ci-local.sh"
+            echo ""
+            echo "  GeoServer:  ./scripts/geoserver-up.sh    (start test instance)"
+            echo "              ./scripts/geoserver-down.sh   (stop and destroy)"
+            echo "              ./scripts/geoserver-status.sh (check status)"
             export PYTHONPATH="$PWD/src:$PYTHONPATH"
           '';
         };

@@ -41,10 +41,16 @@ map("gd", "<cmd>!git diff<CR>", "Git diff")
 -- Textual dev tools
 map("x", "<cmd>split | terminal textual console<CR>", "Textual console")
 
+-- Test GeoServer
+map("su", "<cmd>split | terminal ./scripts/geoserver-up.sh<CR>", "GeoServer start")
+map("sd", "<cmd>split | terminal ./scripts/geoserver-down.sh<CR>", "GeoServer stop")
+map("ss", "<cmd>split | terminal ./scripts/geoserver-status.sh<CR>", "GeoServer status")
+
 -- Register with which-key if available
 if wk_ok then
   wk.add({
     { "<leader>p", group = "GeoTUI Project" },
+    { "<leader>ps", group = "Test GeoServer" },
     { "<leader>pg", group = "Git" },
   })
 end

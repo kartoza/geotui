@@ -517,6 +517,20 @@ class GeoServerTree(Widget):
                 resources = await client.get_full_tree()
                 if not self.is_mounted:
                     return
+                if not resources:
+                    status = self.query_one("#tree-status", Static)
+                    status.update(
+                        "[#CC0403]Server unreachable or returned no workspaces[/]"
+                    )
+                    self.app.notify(
+                        _(
+                            "Could not fetch workspaces. Check the "
+                            "server URL and credentials in Settings (F9)."
+                        ),
+                        severity="error",
+                        timeout=10,
+                    )
+                    return
                 self._populate_tree(resources)
                 count = sum(
                     1 + len(ws.children) + sum(len(s.children) for s in ws.children)
@@ -528,7 +542,12 @@ class GeoServerTree(Widget):
             except Exception:  # nosec B110
                 if self.is_mounted:
                     status = self.query_one("#tree-status", Static)
-                    status.update(_("Connection failed"))
+                    status.update("[#CC0403]Connection failed[/]")
+                    self.app.notify(
+                        _("Connection to GeoServer failed. Check Settings (F9)."),
+                        severity="error",
+                        timeout=10,
+                    )
             finally:
                 self.loading = False
 
