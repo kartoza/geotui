@@ -15,7 +15,7 @@ bandit -r src/ -c pyproject.toml
 
 echo ""
 echo "=== Codespell ==="
-codespell --skip '*.po,*.pot,*.mo,*.lock' src/ tests/ docs/ README.md SPECIFICATION.md PACKAGES.md
+codespell --skip '*.po,*.pot,*.mo,*.lock,docs/site' src/ tests/ docs/ README.md SPECIFICATION.md PACKAGES.md
 
 echo ""
 echo "=== Mypy ==="

@@ -99,6 +99,39 @@ graph TB
 - F9: Settings
 - F10: Quit
 
+### US-005: Bulk Shapefile Publishing
+**As a** GeoServer administrator
+**I want** to bulk publish thousands of shapefiles
+**So that** I can set up large datasets without manual layer-by-layer configuration
+
+**Acceptance Criteria:**
+- Can discover and publish 4000+ shapefiles in one operation
+- Supports create and update (idempotent)
+- Dry-run mode for validation
+- Concurrent uploads with configurable limit
+
+### US-006: Publish Reporting
+**As a** GeoServer administrator
+**I want** a detailed report after bulk publishing
+**So that** I have an audit trail of what was uploaded
+
+**Acceptance Criteria:**
+- PDF report with branded header, detail table, summary stats
+- Color-coded rows (green=success, red=error, grey=skip, blue=dry-run)
+- JSON report for automation
+- Report path displayed after completion
+
+### US-007: CLI Bulk Publishing
+**As a** DevOps engineer
+**I want** to run bulk publish from the command line
+**So that** I can integrate it into CI/CD pipelines
+
+**Acceptance Criteria:**
+- `geotui publish` command with all options
+- Uses saved connections (no credentials in command args)
+- Progress output and exit code on failure
+- PDF and JSON reports generated
+
 ## 4. Functional Requirements
 
 ### FR-001: Application Launch
@@ -169,10 +202,41 @@ graph TB
 - Empty state shows "No connection active" message
 - Refresh capability for reloading tree data
 
+### FR-008: Bulk Shapefile Publishing
+- Discover shapefile bundles from source directory (.shp + .shx + .dbf)
+- Layer naming strategies: basename, prefixed_basename, path_slug
+- Name collision detection before upload
+- Concurrent upload bounded by configurable concurrency (default: 4)
+- Retry with exponential backoff on transient failures
+- Idempotent: create new layers or update existing ones
+- Dry-run mode validates without modifying GeoServer
+- Workspace and datastore auto-creation
+
+### FR-009: Publish Reports
+- PDF report with Kartoza + GeoTUI dual branding
+- Three sections: job summary header, color-coded detail table, summary stats
+- Handles 4000+ rows with paginated tables and repeating headers
+- JSON report alongside PDF for programmatic consumption
+- Reports saved to ~/.local/share/geotui/reports/
+
+### FR-010: CLI Interface
+- `geotui publish` for headless/CI bulk publishing
+- `geotui export` for workspace config export (stub)
+- `geotui import-config` for config replay (stub)
+- Uses saved connections from config.json
+- Progress output and summary on completion
+
+### FR-011: F2 Context Menu Extensions
+- "Bulk Publish Shapefiles" action in GeoServer pane menu
+- Inline configuration form (workspace, datastore, source, naming, concurrency)
+- Progress indicator during upload
+- Summary notification with report path on completion
+
 ## 6. Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.4.0 | 2026-05-20 | Bulk shapefile publisher, PDF/JSON reports, CLI interface |
 | 0.3.0 | 2026-05-19 | GeoServer resource tree in right pane, full REST API client |
 | 0.2.0 | 2026-05-19 | Connection management, settings screen, GeoServer API client |
 | 0.1.0 | 2026-05-19 | Initial release - dual pane MC-style interface |
