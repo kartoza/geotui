@@ -339,22 +339,125 @@ class GeoServerTree(Widget):
             st.fields,
         )
 
-    def action_bulk_publish(self) -> None:
-        """Show the bulk publish configuration form."""
+    def action_copy_from_local(self) -> None:
+        """Copy spatial files from the local pane to GeoServer (F5 handler)."""
+        from geotui.publisher import discover_spatial_files
+        from geotui.widgets.file_pane import FilePane
+
         if not self.connection:
             self.app.notify(_("No connection active"), severity="warning")
             return
-        self._current_action = "bulk_publish"
-        self._show_fields(
-            _("Bulk Publish Shapefiles"),
-            [
-                ("workspace", _("Workspace"), "my_workspace"),
-                ("datastore", _("Datastore"), "my_datastore"),
-                ("source", _("Source Directory"), str(Path.home())),
-                ("naming", _("Naming (basename/path_slug)"), "basename"),
-                ("concurrency", _("Concurrency"), "4"),
-            ],
+
+        # Get source path from left pane.
+        try:
+            file_pane = self.app.query_one("#left-pane", FilePane)
+            source_dir = file_pane.get_selected_path()
+        except Exception:
+            self.app.notify(
+                _("Cannot read the local file pane"),
+                severity="error",
+            )
+            return
+
+        if not source_dir.is_dir():
+            self.app.notify(
+                _("Selected path is not a directory"),
+                severity="warning",
+            )
+            return
+
+        # Get selected workspace from tree.
+        workspace = self._get_selected_workspace()
+        if not workspace:
+            self.app.notify(
+                _("Select a workspace in the tree first"),
+                severity="warning",
+            )
+            return
+
+        # Discover spatial files.
+        groups, warnings = discover_spatial_files(source_dir)
+        if not groups:
+            self.app.notify(
+                _("No spatial files found in ") + str(source_dir),
+                severity="warning",
+            )
+            return
+
+        # Summarise what was found.
+        total_files = sum(len(g.files) for g in groups)
+        formats = ", ".join(g.format_type for g in groups)
+        self.app.notify(
+            f"Found {total_files} file(s) [{formats}] in {source_dir.name}",
+            severity="information",
         )
+
+        # Run the publish in a background worker.
+        self.run_worker(
+            self._run_copy_publish(source_dir, workspace, groups, warnings),
+            exit_on_error=False,
+        )
+
+    async def _run_copy_publish(
+        self,
+        source_dir: Path,
+        workspace: str,
+        groups: list,
+        warnings: list[str],
+    ) -> None:
+        """Run copy-to-publish in background for all discovered spatial groups."""
+        from geotui.publisher import NamingStrategy, PublishConfig, run_publish
+        from geotui.report import generate_json_report, generate_pdf_report
+
+        if self.connection is None:
+            return
+
+        total_groups = len(groups)
+        for idx, group in enumerate(groups, start=1):
+            store_name = f"{source_dir.name}_{group.format_type}"
+
+            config = PublishConfig(
+                workspace=workspace,
+                datastore=store_name,
+                source_directory=source_dir,
+                naming=NamingStrategy.BASENAME,
+                concurrency=4,
+            )
+
+            group_idx = idx  # bind loop variable for closure
+
+            def progress(
+                current: int, total: int, name: str, _gi: int = group_idx
+            ) -> None:
+                if self.is_mounted:
+                    status = self.query_one("#tree-status", Static)
+                    status.update(
+                        f"[{_gi}/{total_groups}] Publishing {current}/{total}: {name}"
+                    )
+
+            report = await run_publish(self.connection, config, progress)
+            if self.is_mounted:
+                self.refresh_tree()
+
+        # Generate reports after all groups are done.
+        if self.is_mounted and self.connection is not None:
+            from datetime import datetime, timezone
+
+            ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
+            out_dir = Path.home() / ".local/share/geotui/reports"
+            pdf_path = out_dir / f"publish-{ts}.pdf"
+            json_path = out_dir / f"publish-{ts}.json"
+
+            # Use the last report for summary generation.
+            generate_pdf_report(report, pdf_path)
+            generate_json_report(report, json_path)
+
+            summary = (
+                f"Published {total_groups} group(s) to '{workspace}'\n"
+                f"Report: {pdf_path}"
+            )
+            self.app.notify(summary, severity="information", timeout=10)
+            self._hide_action_panel()
 
     def action_refresh(self) -> None:
         """Refresh the tree."""
@@ -387,62 +490,6 @@ class GeoServerTree(Widget):
                 self._create_store(self._selected_store_type, values),
                 exit_on_error=False,
             )
-        elif self._current_action == "bulk_publish":
-            fields = [
-                ("workspace", "", ""),
-                ("datastore", "", ""),
-                ("source", "", ""),
-                ("naming", "", ""),
-                ("concurrency", "", ""),
-            ]
-            values = self._get_field_values(fields)
-            if not values.get("workspace"):
-                self.app.notify(_("Workspace is required"), severity="error")
-                return
-            if not values.get("datastore"):
-                self.app.notify(_("Datastore is required"), severity="error")
-                return
-            self.run_worker(self._run_bulk_publish(values), exit_on_error=False)
-
-    async def _run_bulk_publish(self, values: dict[str, str]) -> None:
-        """Run bulk publish in background."""
-        from geotui.publisher import NamingStrategy, PublishConfig, run_publish
-        from geotui.report import generate_json_report, generate_pdf_report
-
-        config = PublishConfig(
-            workspace=values.get("workspace", ""),
-            datastore=values.get("datastore", ""),
-            source_directory=Path(values.get("source", str(Path.home()))),
-            naming=NamingStrategy(values.get("naming", "basename")),
-            concurrency=int(values.get("concurrency", "4")),
-        )
-
-        def progress(current: int, total: int, name: str) -> None:
-            if self.is_mounted:
-                status = self.query_one("#tree-status", Static)
-                status.update(f"Publishing {current}/{total}: {name}")
-
-        if self.connection is None:
-            return
-        report = await run_publish(self.connection, config, progress)
-
-        if self.is_mounted:
-            from datetime import datetime, timezone
-
-            ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
-            out_dir = Path.home() / ".local/share/geotui/reports"
-            pdf_path = out_dir / f"publish-{ts}.pdf"
-            json_path = out_dir / f"publish-{ts}.json"
-            generate_pdf_report(report, pdf_path)
-            generate_json_report(report, json_path)
-
-            summary = (
-                f"Created: {report.created} | Updated: {report.updated} | "
-                f"Failed: {report.failed}\nReport: {pdf_path}"
-            )
-            self.app.notify(summary, severity="information", timeout=10)
-            self._hide_action_panel()
-            self.refresh_tree()
 
     async def _create_workspace(self, name: str) -> None:
         """Create a workspace via the API."""

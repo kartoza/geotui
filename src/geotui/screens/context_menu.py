@@ -86,7 +86,6 @@ class ContextMenuScreen(ModalScreen[str | None]):
             opts.add_option(Option(_("Create Workspace"), id="gs_create_workspace"))
             opts.add_option(Option(_("Create Store"), id="gs_create_store"))
             opts.add_option(Option(_("Refresh Tree"), id="gs_refresh"))
-            opts.add_option(Option(_("Bulk Publish Shapefiles"), id="gs_bulk_publish"))
         else:
             opts.add_option(Option(_("Create Directory"), id="local_mkdir"))
 

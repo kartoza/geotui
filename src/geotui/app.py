@@ -93,16 +93,23 @@ class GeoTUIApp(App[None]):
                 tree.action_create_store()
             elif action_id == "gs_refresh":
                 tree.refresh_tree()
-            elif action_id == "gs_bulk_publish":
-                tree.action_bulk_publish()
             elif action_id == "local_mkdir":
                 self.action_mkdir()
 
         self.push_screen(ContextMenuScreen(active), callback=handle_menu_result)
 
     def action_copy(self) -> None:
-        """Copy selected item."""
-        self.notify(_("Copy"), title=_("GeoTUI"))
+        """F5 Copy: publish local spatial files to GeoServer."""
+        from geotui.widgets.geoserver_tree import GeoServerTree
+
+        tree = self.query_one("#right-pane", GeoServerTree)
+        if tree.connection is None:
+            self.notify(
+                _("Connect to a GeoServer first (F9)"),
+                severity="error",
+            )
+            return
+        tree.action_copy_from_local()
 
     def action_move(self) -> None:
         """Move selected item."""
