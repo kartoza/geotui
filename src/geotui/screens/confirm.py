@@ -108,9 +108,7 @@ class ConfirmScreen(ModalScreen[bool]):
                     yield Static(self._message, id="confirm-message")
                     if self._require_name:
                         yield Static(
-                            _("Type '{}' to confirm:").format(
-                                self._require_name
-                            ),
+                            _("Type '{}' to confirm:").format(self._require_name),
                             id="confirm-name-prompt",
                         )
                         yield Input(

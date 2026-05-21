@@ -964,10 +964,10 @@ class GeoServerTree(Widget):
         if resource_type in ("layer", "coverage"):
             parent = tree.cursor_node.parent
             while parent:
-                if (
-                    isinstance(parent.data, TreeNodeData)
-                    and parent.data.node_type
-                    in ("datastore", "coveragestore", "wmsstore")
+                if isinstance(parent.data, TreeNodeData) and parent.data.node_type in (
+                    "datastore",
+                    "coveragestore",
+                    "wmsstore",
                 ):
                     store_name = parent.data.name
                     break
@@ -1016,7 +1016,11 @@ class GeoServerTree(Widget):
         """
         logger.info(
             "Deleting %s '%s' (store='%s', workspace='%s') on '%s'",
-            resource_type, name, store, workspace, conn.name,
+            resource_type,
+            name,
+            store,
+            workspace,
+            conn.name,
         )
         try:
             decrypted = self._decrypt_conn(conn)

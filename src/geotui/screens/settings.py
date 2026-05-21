@@ -552,6 +552,7 @@ class SettingsScreen(Screen[None]):
             if not fernet:
                 self.notify(_("Current password is wrong"), severity="error")
                 return
+
             # Now prompt for the new password
             def handle_new_pw(new_pw: str | None) -> None:
                 if not new_pw:
@@ -573,13 +574,9 @@ class SettingsScreen(Screen[None]):
                         severity="error",
                     )
 
-            self.app.push_screen(
-                UnlockScreen(is_setup=True), callback=handle_new_pw
-            )
+            self.app.push_screen(UnlockScreen(is_setup=True), callback=handle_new_pw)
 
-        self.app.push_screen(
-            UnlockScreen(is_setup=False), callback=handle_old_pw
-        )
+        self.app.push_screen(UnlockScreen(is_setup=False), callback=handle_old_pw)
 
     def _reset_vault(self) -> None:
         """Reset the vault after confirmation."""

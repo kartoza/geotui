@@ -342,9 +342,7 @@ class ConfigManager:
             key = _derive_key(master_password, salt)
             f = Fernet(key)
             # Store a check token so we can verify the password later
-            self.config.vault_check = f.encrypt(
-                b"geotui-vault-ok"
-            ).decode("utf-8")
+            self.config.vault_check = f.encrypt(b"geotui-vault-ok").decode("utf-8")
             # Encrypt existing plaintext passwords
             for conn in self.config.connections:
                 if conn.password and not self._looks_encrypted(conn.password):
@@ -393,9 +391,7 @@ class ConfigManager:
         """
         return encrypt_value(plaintext, fernet)
 
-    def change_master_password(
-        self, old_password: str, new_password: str
-    ) -> bool:
+    def change_master_password(self, old_password: str, new_password: str) -> bool:
         """Change the master password, re-encrypting all connections.
 
         Args:
@@ -412,22 +408,18 @@ class ConfigManager:
             # Decrypt all passwords with old key
             plaintext_passwords: dict[str, str] = {}
             for conn in self.config.connections:
-                plaintext_passwords[conn.id] = decrypt_value(
-                    conn.password, old_fernet
-                )
+                plaintext_passwords[conn.id] = decrypt_value(conn.password, old_fernet)
             # Generate new salt and key
             salt = secrets.token_bytes(16)
             self.config.vault_salt = base64.b64encode(salt).decode("utf-8")
             key = _derive_key(new_password, salt)
             new_fernet = Fernet(key)
-            self.config.vault_check = new_fernet.encrypt(
-                b"geotui-vault-ok"
-            ).decode("utf-8")
+            self.config.vault_check = new_fernet.encrypt(b"geotui-vault-ok").decode(
+                "utf-8"
+            )
             # Re-encrypt with new key
             for conn in self.config.connections:
-                conn.password = encrypt_value(
-                    plaintext_passwords[conn.id], new_fernet
-                )
+                conn.password = encrypt_value(plaintext_passwords[conn.id], new_fernet)
             self.save()
             return True
 

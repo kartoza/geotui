@@ -58,9 +58,7 @@ class MCDirectoryTree(DirectoryTree):
         super().__init__(*args, **kwargs)
         self._selected_paths: set[Path] = set()
 
-    def _populate_node(
-        self, node: TreeNode[DirEntry], content: Iterable[Path]
-    ) -> None:
+    def _populate_node(self, node: TreeNode[DirEntry], content: Iterable[Path]) -> None:
         """Populate node with '..' as the first entry."""
         node.remove_children()
         # Add ".." entry for parent navigation (only for root node)

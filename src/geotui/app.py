@@ -107,8 +107,10 @@ class GeoTUIApp(App[None]):
         elif self.config_manager.config.connections:
             # Existing unencrypted connections - prompt to set up vault
             self.notify(
-                _("Your credentials are not encrypted. "
-                  "Go to Settings (F9) to set up a master password."),
+                _(
+                    "Your credentials are not encrypted. "
+                    "Go to Settings (F9) to set up a master password."
+                ),
                 severity="warning",
                 timeout=15,
             )

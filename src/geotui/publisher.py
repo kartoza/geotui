@@ -445,14 +445,9 @@ def discover_spatial_files_from_paths(
     shp_bundles: list[ShapefileBundle] = []
     for stem, ext_map in sorted(shp_stems.items()):
         # Check required files exist
-        missing = [
-            ext for ext in sorted(SHAPEFILE_REQUIRED)
-            if ext not in ext_map
-        ]
+        missing = [ext for ext in sorted(SHAPEFILE_REQUIRED) if ext not in ext_map]
         if missing:
-            warnings.append(
-                f"Incomplete bundle '{stem}': missing {', '.join(missing)}"
-            )
+            warnings.append(f"Incomplete bundle '{stem}': missing {', '.join(missing)}")
             continue
         component_files = sorted(ext_map.values(), key=lambda p: p.suffix)
         directory = component_files[0].parent
