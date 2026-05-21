@@ -209,8 +209,8 @@ class UnlockScreen(ModalScreen[str | None]):
             # Tab to confirm field
             try:
                 self.query_one("#unlock-confirm", Input).focus()
-            except Exception:
-                pass
+            except Exception:  # nosec B110
+                pass  # Confirm field may not exist in unlock mode
             return
         self._attempt_unlock()
 

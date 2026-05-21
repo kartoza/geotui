@@ -171,8 +171,8 @@ class GeoTUIApp(App[None]):
         try:
             tree = self.query_one("#right-pane", GeoServerTree)
             tree.refresh_connections()
-        except Exception:
-            pass
+        except Exception:  # nosec B110
+            pass  # Tree may not be mounted yet
 
     def action_switch_pane(self) -> None:
         """Switch focus between left and right panes."""
