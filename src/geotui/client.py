@@ -695,6 +695,74 @@ class GeoServerClient:
         status = await self._put(path, zip_data, "application/zip")
         return status in (200, 201)
 
+    async def upload_gpkg(
+        self,
+        workspace: str,
+        store: str,
+        data: bytes,
+        update: bool = False,
+    ) -> bool:
+        """Upload a GeoPackage file to a datastore.
+
+        Args:
+            workspace: Workspace name.
+            store: Datastore name.
+            data: GeoPackage file bytes.
+            update: If True, overwrite existing.
+
+        Returns:
+            True if upload succeeded.
+        """
+        path = (
+            f"/rest/workspaces/{workspace}/datastores/{store}/file.gpkg?configure=first"
+        )
+        if update:
+            path += "&update=overwrite"
+        status = await self._put(path, data, "application/x-gpkg")
+        return status in (200, 201)
+
+    async def upload_geotiff(
+        self,
+        workspace: str,
+        store: str,
+        data: bytes,
+        update: bool = False,
+    ) -> bool:
+        """Upload a GeoTIFF file to a coverage store.
+
+        Args:
+            workspace: Workspace name.
+            store: Coverage store name.
+            data: GeoTIFF file bytes.
+            update: If True, overwrite existing.
+
+        Returns:
+            True if upload succeeded.
+        """
+        path = (
+            f"/rest/workspaces/{workspace}/coveragestores/{store}"
+            f"/file.geotiff?configure=first"
+        )
+        if update:
+            path += "&update=overwrite"
+        status = await self._put(path, data, "image/tiff")
+        return status in (200, 201)
+
+    async def recalculate_bbox(self, workspace: str, layer_name: str) -> bool:
+        """Recalculate bounding box for a layer.
+
+        Args:
+            workspace: Workspace name.
+            layer_name: Layer name.
+
+        Returns:
+            True if successful.
+        """
+        return await self._put_json(
+            f"/rest/layers/{workspace}:{layer_name}.json",
+            {"layer": {"resource": {"recalculate": "nativebbox,latlonbbox"}}},
+        )
+
     async def assign_style(
         self, workspace: str, layer_name: str, style_name: str
     ) -> bool:

@@ -88,6 +88,14 @@ class FilePane(Widget):
             footer = self.query_one(".pane-footer", Static)
             footer.update(value)
 
+    def get_selected_path(self) -> Path:
+        """Get the currently selected/displayed directory path.
+
+        Returns:
+            The current directory path.
+        """
+        return Path(self.current_path)
+
     def on_directory_tree_directory_selected(
         self, event: DirectoryTree.DirectorySelected
     ) -> None:
