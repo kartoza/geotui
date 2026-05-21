@@ -748,6 +748,15 @@ async def _upload_bundle(
                 elapsed = time.monotonic() - t0
 
                 if success:
+                    # configure=first only runs on store creation; if the layer
+                    # was not auto-configured, create the featuretype explicitly.
+                    if not await client.layer_exists(config.workspace, layer_name):
+                        await client.create_featuretype(
+                            config.workspace,
+                            config.datastore,
+                            bundle.name,
+                            layer_name,
+                        )
                     if style:
                         await client.assign_style(config.workspace, layer_name, style)
                     return BundleResult(

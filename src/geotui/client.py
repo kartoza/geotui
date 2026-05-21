@@ -701,6 +701,31 @@ class GeoServerClient:
         status = await self._put(path, zip_data, "application/zip")
         return status in (200, 201)
 
+    async def create_featuretype(
+        self,
+        workspace: str,
+        store: str,
+        native_name: str,
+        layer_name: str,
+    ) -> bool:
+        """Explicitly configure a feature type in an existing datastore.
+
+        Required when uploading additional shapefiles to a datastore that was
+        already created — GeoServer's configure=first only runs on store creation.
+
+        Args:
+            workspace: Target workspace name.
+            store: Target datastore name.
+            native_name: Shapefile stem (must match the file on disk).
+            layer_name: Desired GeoServer layer name.
+
+        Returns:
+            True if the feature type was created (HTTP 201) or already existed.
+        """
+        path = f"/rest/workspaces/{workspace}/datastores/{store}/featuretypes"
+        payload = {"featureType": {"name": layer_name, "nativeName": native_name}}
+        return await self._post(path, payload)
+
     async def upload_gpkg(
         self,
         workspace: str,
