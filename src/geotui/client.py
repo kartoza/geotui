@@ -5,12 +5,41 @@ GeoServer resources (workspaces, stores, layers) via the REST API.
 """
 
 import asyncio
+import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
 from geotui.config import Connection
+
+logger = logging.getLogger("geotui.client")
+
+# GeoServer resource names: alphanumeric, underscore, hyphen, dot
+_RESOURCE_NAME_RE = re.compile(r"^[a-zA-Z0-9_.\-]+$")
+_MAX_NAME_LENGTH = 256
+
+
+def validate_resource_name(name: str, kind: str = "resource") -> None:
+    """Validate a GeoServer resource name.
+
+    Args:
+        name: The resource name to validate.
+        kind: Human-readable kind for error messages (e.g. "workspace").
+
+    Raises:
+        ValueError: If the name is invalid.
+    """
+    if not name:
+        raise ValueError(f"{kind} name cannot be empty")
+    if len(name) > _MAX_NAME_LENGTH:
+        raise ValueError(f"{kind} name exceeds {_MAX_NAME_LENGTH} characters")
+    if not _RESOURCE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid {kind} name '{name}': "
+            f"only letters, numbers, underscore, hyphen, and dot are allowed"
+        )
 
 
 @dataclass
@@ -188,19 +217,24 @@ async def resolve_base_url(
     try:
         async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
             for candidate in candidates:
+                probe = f"{candidate}/rest/about/version.json"
                 try:
                     resp = await client.get(
-                        f"{candidate}/rest/about/version.json",
+                        probe,
                         auth=auth,
                         headers={"Accept": "application/json"},
                     )
+                    logger.debug("resolve probe %s -> %s", probe, resp.status_code)
                     if resp.status_code == 200:
+                        logger.info("Resolved base URL: %s", candidate)
                         return candidate
-                except httpx.RequestError:
+                except httpx.RequestError as exc:
+                    logger.debug("resolve probe %s failed: %s", probe, exc)
                     continue
     except httpx.RequestError:
         pass
 
+    logger.warning("Could not resolve base URL, falling back to: %s", base)
     return base
 
 
@@ -225,6 +259,8 @@ class GeoServerClient:
         self._conn = conn
         self._base_url = conn.url.rstrip("/")
         self._timeout = timeout
+        self._username = conn.username
+        self._password = conn.password
         self._auth = httpx.BasicAuth(conn.username, conn.password)
         self._resolved = False
         self._client: httpx.AsyncClient | None = None
@@ -238,8 +274,8 @@ class GeoServerClient:
         if not self._resolved:
             self._base_url = await resolve_base_url(
                 self._base_url,
-                self._conn.username,
-                self._conn.password,
+                self._username,
+                self._password,
                 self._timeout,
             )
             self._resolved = True
@@ -271,16 +307,19 @@ class GeoServerClient:
             Parsed JSON response or None on failure.
         """
         client = await self._ensure_client()
+        url = f"{self._base_url}{path}"
+        logger.debug("GET %s", url)
         try:
             response = await client.get(
-                f"{self._base_url}{path}",
+                url,
                 auth=self._auth,
                 headers={"Accept": "application/json"},
             )
             if response.status_code == 200:
                 return response.json()
-        except httpx.RequestError:
-            pass
+            logger.warning("GET %s -> %s", url, response.status_code)
+        except httpx.RequestError as exc:
+            logger.error("GET %s failed: %s", url, exc)
         return None
 
     async def _post(self, path: str, json_data: dict[str, Any]) -> bool:
@@ -294,9 +333,11 @@ class GeoServerClient:
             True if the request returned 201 Created.
         """
         client = await self._ensure_client()
+        url = f"{self._base_url}{path}"
+        logger.debug("POST %s", url)
         try:
             response = await client.post(
-                f"{self._base_url}{path}",
+                url,
                 json=json_data,
                 auth=self._auth,
                 headers={
@@ -304,8 +345,14 @@ class GeoServerClient:
                     "Accept": "application/json",
                 },
             )
-            return response.status_code == 201
-        except httpx.RequestError:
+            if response.status_code == 201:
+                return True
+            logger.warning(
+                "POST %s -> %s %s", url, response.status_code, response.text[:200]
+            )
+            return False
+        except httpx.RequestError as exc:
+            logger.error("POST %s failed: %s", url, exc)
             return False
 
     # ── Generic resource fetching ──────────────────────────
@@ -451,6 +498,7 @@ class GeoServerClient:
 
     async def create_workspace(self, name: str) -> bool:
         """Create a new workspace."""
+        validate_resource_name(name, "workspace")
         return await self._post(
             "/rest/workspaces.json",
             {"workspace": {"name": name}},
@@ -474,6 +522,8 @@ class GeoServerClient:
         Returns:
             True if created successfully.
         """
+        validate_resource_name(workspace, "workspace")
+        validate_resource_name(name, "datastore")
         return await self._post(
             f"/rest/workspaces/{workspace}/datastores.json",
             {
@@ -551,6 +601,8 @@ class GeoServerClient:
         name = field_values.get("name", "")
         if not name:
             return False
+        validate_resource_name(workspace, "workspace")
+        validate_resource_name(name, "store")
 
         if store_type.category == "remote":
             return await self.create_wmsstore(
@@ -825,16 +877,19 @@ class GeoServerClient:
             path: API path relative to base URL.
 
         Returns:
-            True if the request returned 200 OK.
+            True if the request returned 2xx.
         """
         client = await self._ensure_client()
+        url = f"{self._base_url}{path}"
+        logger.debug("DELETE %s", url)
         try:
-            response = await client.delete(
-                f"{self._base_url}{path}",
-                auth=self._auth,
+            response = await client.delete(url, auth=self._auth)
+            logger.debug(
+                "DELETE %s -> %s %s", url, response.status_code, response.text[:200]
             )
-            return response.status_code == 200
-        except httpx.RequestError:
+            return 200 <= response.status_code < 300
+        except httpx.RequestError as exc:
+            logger.error("DELETE %s failed: %s", url, exc)
             return False
 
     async def delete_datastore(

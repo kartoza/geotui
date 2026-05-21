@@ -7,9 +7,12 @@ for creating workspaces and stores via the F2 context menu.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger("geotui.tree")
 
 if TYPE_CHECKING:
     from geotui.publisher import SpatialFileGroup
@@ -232,6 +235,30 @@ class GeoServerTree(Widget):
         self._current_workspace = ""
         self._selected_store_type: StoreType | None = None
 
+    def _decrypt_conn(self, conn: Connection) -> Connection:
+        """Decrypt a connection's password via the app vault key.
+
+        Args:
+            conn: Connection with potentially encrypted password.
+
+        Returns:
+            Connection with plaintext password.
+        """
+        from geotui.app import GeoTUIApp
+
+        app = self.app
+        if isinstance(app, GeoTUIApp):
+            if app.config_manager.has_vault and not app.vault_key:
+                logger.warning(
+                    "Vault locked - cannot decrypt connection '%s'", conn.name
+                )
+                self.app.notify(
+                    _("Vault is locked. Press F9 to unlock."),
+                    severity="error",
+                )
+            return app.decrypt_connection(conn)
+        return conn
+
     def compose(self) -> ComposeResult:
         """Compose the tree widget."""
         with Vertical():
@@ -376,8 +403,8 @@ class GeoServerTree(Widget):
         if conn is None:
             return
 
-        # Test the connection first
-        result = await test_connection(conn)
+        # Test the connection first (decrypt for API use)
+        result = await test_connection(self._decrypt_conn(conn))
 
         if not self.is_mounted:
             return
@@ -409,7 +436,7 @@ class GeoServerTree(Widget):
         conn_node.set_label(f"[bold {_STATE_COLORS['connected']}]{conn.name}[/]")
 
         try:
-            async with GeoServerClient(conn) as client:
+            async with GeoServerClient(self._decrypt_conn(conn)) as client:
                 resources = await client.get_full_tree()
 
             if not self.is_mounted:
@@ -731,7 +758,10 @@ class GeoServerTree(Widget):
 
     def action_copy_from_local(self) -> None:
         """Copy spatial files from the local pane to GeoServer (F5 handler)."""
-        from geotui.publisher import discover_spatial_files
+        from geotui.publisher import (
+            discover_spatial_files,
+            discover_spatial_files_from_paths,
+        )
         from geotui.widgets.file_pane import FilePane
 
         result = self._get_selected_connection()
@@ -741,21 +771,15 @@ class GeoServerTree(Widget):
 
         conn, _ws = result
 
-        # Get source path from left pane.
+        # Get source from left pane.
         try:
             file_pane = self.app.query_one("#left-pane", FilePane)
+            selected_files = file_pane.get_selected_files()
             source_dir = file_pane.get_selected_path()
         except Exception:
             self.app.notify(
                 _("Cannot read the local file pane"),
                 severity="error",
-            )
-            return
-
-        if not source_dir.is_dir():
-            self.app.notify(
-                _("Selected path is not a directory"),
-                severity="warning",
             )
             return
 
@@ -768,11 +792,21 @@ class GeoServerTree(Widget):
             )
             return
 
-        # Discover spatial files.
-        groups, warnings = discover_spatial_files(source_dir)
+        # Use Ctrl+T selected files if any, otherwise scan directory.
+        if selected_files:
+            groups, warnings = discover_spatial_files_from_paths(selected_files)
+        else:
+            if not source_dir.is_dir():
+                self.app.notify(
+                    _("Selected path is not a directory"),
+                    severity="warning",
+                )
+                return
+            groups, warnings = discover_spatial_files(source_dir)
+
         if not groups:
             self.app.notify(
-                _("No spatial files found in ") + str(source_dir),
+                _("No spatial files found"),
                 severity="warning",
             )
             return
@@ -780,8 +814,13 @@ class GeoServerTree(Widget):
         # Summarise what was found.
         total_files = sum(len(g.files) for g in groups)
         formats = ", ".join(g.format_type for g in groups)
+        source_label = (
+            f"{len(selected_files)} selected file(s)"
+            if selected_files
+            else source_dir.name
+        )
         self.app.notify(
-            f"Found {total_files} file(s) [{formats}] in {source_dir.name}",
+            f"Found {total_files} file(s) [{formats}] from {source_label}",
             severity="information",
         )
 
@@ -846,7 +885,7 @@ class GeoServerTree(Widget):
                         f"[{_gi}/{total_groups}] Publishing {current}/{total}: {name}"
                     )
 
-            report = await run_publish(conn, config, progress)
+            report = await run_publish(self._decrypt_conn(conn), config, progress)
             if self.is_mounted:
                 # Refresh the connection that was published to
                 self._refresh_connection(conn.id)
@@ -927,8 +966,18 @@ class GeoServerTree(Widget):
                     exit_on_error=False,
                 )
 
+        # Require typing the name for stores and workspaces
+        require_name: str | None = None
+        if resource_type in (
+            "workspace",
+            "datastore",
+            "coveragestore",
+            "wmsstore",
+        ):
+            require_name = name
+
         self.app.push_screen(
-            ConfirmScreen(_("Confirm Delete"), msg),
+            ConfirmScreen(_("Confirm Delete"), msg, require_name=require_name),
             callback=handle_confirm,
         )
 
@@ -943,23 +992,37 @@ class GeoServerTree(Widget):
             name: Resource name.
             workspace: Parent workspace name.
         """
-        async with GeoServerClient(conn) as client:
-            if resource_type == "workspace":
-                ok = await client.delete_workspace(name, recurse=True)
-            elif resource_type == "datastore":
-                ok = await client.delete_datastore(workspace, name, recurse=True)
-            elif resource_type == "coveragestore":
-                ok = await client.delete_coveragestore(workspace, name, recurse=True)
-            elif resource_type in ("layer", "coverage"):
-                ok = await client.delete_layer(workspace, name)
-            else:
-                ok = False
+        logger.info(
+            "Deleting %s '%s' in workspace '%s' on connection '%s'",
+            resource_type, name, workspace, conn.name,
+        )
+        try:
+            decrypted = self._decrypt_conn(conn)
+            async with GeoServerClient(decrypted) as client:
+                if resource_type == "workspace":
+                    ok = await client.delete_workspace(name, recurse=True)
+                elif resource_type == "datastore":
+                    ok = await client.delete_datastore(workspace, name, recurse=True)
+                elif resource_type == "coveragestore":
+                    ok = await client.delete_coveragestore(
+                        workspace, name, recurse=True
+                    )
+                elif resource_type in ("layer", "coverage"):
+                    ok = await client.delete_layer(workspace, name)
+                else:
+                    logger.warning("Unknown resource type: %s", resource_type)
+                    ok = False
+        except Exception:
+            logger.exception("Delete failed for %s '%s'", resource_type, name)
+            ok = False
 
         if self.is_mounted:
             if ok:
+                logger.info("Deleted %s '%s' successfully", resource_type, name)
                 self.app.notify(f"Deleted '{name}'", severity="information")
                 self._refresh_connection(conn.id)
             else:
+                logger.error("Failed to delete %s '%s'", resource_type, name)
                 self.app.notify(f"Failed to delete '{name}'", severity="error")
 
     def action_refresh(self) -> None:
@@ -1011,7 +1074,7 @@ class GeoServerTree(Widget):
             conn: The GeoServer connection.
             name: Workspace name.
         """
-        async with GeoServerClient(conn) as client:
+        async with GeoServerClient(self._decrypt_conn(conn)) as client:
             ok = await client.create_workspace(name)
         if self.is_mounted:
             if ok:
@@ -1036,7 +1099,7 @@ class GeoServerTree(Widget):
         """
         ws = self._current_workspace
         name = field_values.get("name", "")
-        async with GeoServerClient(conn) as client:
+        async with GeoServerClient(self._decrypt_conn(conn)) as client:
             ok = await client.create_store_from_type(ws, store_type, field_values)
         if self.is_mounted:
             if ok:

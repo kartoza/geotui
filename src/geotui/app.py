@@ -1,5 +1,8 @@
 """Main GeoTUI application."""
 
+import logging
+
+from cryptography.fernet import Fernet
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.design import ColorSystem
@@ -27,10 +30,44 @@ class GeoTUIApp(App[None]):
         """
         super().__init__()
         self.config_manager = config_manager or ConfigManager()
+        self.vault_key: Fernet | None = None
+        self._setup_logging()
+
+    @staticmethod
+    def _setup_logging() -> None:
+        """Configure file logging to ~/.config/geotui/geotui.log."""
+        from geotui.config import _get_config_dir
+
+        log_path = _get_config_dir() / "geotui.log"
+        handler = logging.FileHandler(str(log_path), encoding="utf-8")
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        root = logging.getLogger("geotui")
+        root.setLevel(logging.DEBUG)
+        root.addHandler(handler)
+
+    def decrypt_connection(self, conn) -> object:
+        """Return a connection with its password decrypted.
+
+        Args:
+            conn: Connection with potentially encrypted password.
+
+        Returns:
+            Connection with plaintext password for API use.
+        """
+        if self.vault_key:
+            return self.config_manager.decrypt_connection(conn, self.vault_key)
+        if self.config_manager.has_vault and not self.vault_key:
+            # Vault exists but not unlocked — prompt now
+            self._show_unlock()
+        return conn
 
     BINDINGS = [
-        Binding("q", "quit", _("Quit")),
-        Binding("tab", "switch_pane", _("Switch Pane")),
+        Binding("tab", "switch_pane", _("Switch Pane"), show=False),
         Binding("f1", "help", _("Help")),
         Binding("f2", "menu", _("Menu")),
         Binding("f5", "copy", _("Copy")),
@@ -55,10 +92,77 @@ class GeoTUIApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        """Show splash screen on startup."""
+        """Show splash screen, then unlock if needed."""
         from geotui.screens.splash import SplashScreen
 
-        self.push_screen(SplashScreen())
+        self.push_screen(SplashScreen(), callback=self._after_splash)
+
+    def _after_splash(self, _result: None = None) -> None:
+        """After splash dismisses, show unlock/setup if needed."""
+        if self.config_manager.has_vault:
+            self._show_unlock()
+        elif self.config_manager.config.connections:
+            # Existing connections but no vault - migrate to encrypted storage
+            self._show_vault_setup()
+
+    def _show_unlock(self) -> None:
+        """Show the unlock screen for existing vault."""
+        from geotui.screens.unlock import UnlockScreen
+
+        def handle_unlock(password: str | None) -> None:
+            if password is None:
+                # User chose to reset vault
+                self.config_manager.reset_vault()
+                self.notify(
+                    _("Vault reset. All connections removed."),
+                    severity="warning",
+                    timeout=10,
+                )
+                self._show_vault_setup()
+                return
+            fernet = self.config_manager.unlock(password)
+            if fernet:
+                self.vault_key = fernet
+                self.notify(_("Vault unlocked"), severity="information")
+                # Refresh tree now that credentials can be decrypted
+                self._refresh_geoserver_tree()
+            else:
+                self.notify(
+                    _("Wrong password. Try again."),
+                    severity="error",
+                    timeout=5,
+                )
+                self._show_unlock()
+
+        self.push_screen(UnlockScreen(is_setup=False), callback=handle_unlock)
+
+    def _show_vault_setup(self) -> None:
+        """Show vault setup screen for first-time or post-reset."""
+        from geotui.screens.unlock import UnlockScreen
+
+        def handle_setup(password: str | None) -> None:
+            if password is None:
+                # Cancelled setup - still usable but no encryption
+                return
+            self.config_manager.init_vault(password)
+            self.vault_key = self.config_manager.unlock(password)
+            self.notify(
+                _("Master password created. Credentials are now encrypted."),
+                severity="information",
+                timeout=10,
+            )
+
+        self.push_screen(UnlockScreen(is_setup=True), callback=handle_setup)
+
+    def _refresh_geoserver_tree(self) -> None:
+        """Refresh the GeoServer tree after vault unlock."""
+        from geotui.widgets.geoserver_tree import GeoServerTree
+
+        try:
+            tree = self.query_one("#right-pane", GeoServerTree)
+            tree.refresh_connections()
+        except Exception:
+            pass
 
     def action_switch_pane(self) -> None:
         """Switch focus between left and right panes."""
@@ -87,8 +191,6 @@ class GeoTUIApp(App[None]):
                 tree.action_create_store()
             elif action_id == "gs_refresh":
                 tree.refresh_tree()
-            elif action_id == "local_mkdir":
-                self.action_mkdir()
             elif action_id == "local_open_reports":
                 self._open_reports_folder()
 

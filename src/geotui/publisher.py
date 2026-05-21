@@ -402,6 +402,106 @@ def discover_spatial_files(
     return groups, warnings
 
 
+def discover_spatial_files_from_paths(
+    paths: list[Path],
+) -> tuple[list[SpatialFileGroup], list[str]]:
+    """Build spatial file groups from an explicit list of file paths.
+
+    Shapefile components are grouped into bundles by stem.  GeoPackage and
+    GeoTIFF files are grouped by format.  Shapefile companion files that
+    are present on disk but missing from *paths* are included automatically.
+
+    Parameters
+    ----------
+    paths:
+        Explicit list of file paths (companions already expanded by caller).
+
+    Returns
+    -------
+    tuple[list[SpatialFileGroup], list[str]]
+        A pair of ``(groups, warning_messages)``.
+    """
+    groups: list[SpatialFileGroup] = []
+    warnings: list[str] = []
+
+    # Classify files by format
+    shp_stems: dict[str, dict[str, Path]] = {}  # stem -> {ext: path}
+    gpkg_files: list[Path] = []
+    tif_files: list[Path] = []
+
+    for path in paths:
+        if not path.is_file():
+            continue
+        suffix = path.suffix.lower()
+        if suffix in SHAPEFILE_ALL:
+            stem = path.stem
+            shp_stems.setdefault(stem, {})[suffix] = path
+        elif suffix == ".gpkg":
+            gpkg_files.append(path)
+        elif suffix in _GEOTIFF_EXTENSIONS:
+            tif_files.append(path)
+
+    # --- Shapefiles ---------------------------------------------------------
+    shp_bundles: list[ShapefileBundle] = []
+    for stem, ext_map in sorted(shp_stems.items()):
+        # Check required files exist
+        missing = [
+            ext for ext in sorted(SHAPEFILE_REQUIRED)
+            if ext not in ext_map
+        ]
+        if missing:
+            warnings.append(
+                f"Incomplete bundle '{stem}': missing {', '.join(missing)}"
+            )
+            continue
+        component_files = sorted(ext_map.values(), key=lambda p: p.suffix)
+        directory = component_files[0].parent
+        shp_bundles.append(
+            ShapefileBundle(
+                name=stem,
+                directory=directory,
+                files=tuple(component_files),
+            )
+        )
+
+    if shp_bundles:
+        store_type, category = _FORMAT_STORE_MAP["shapefile"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="shapefile",
+                store_type=store_type,
+                store_category=category,
+                files=list(shp_bundles),
+            )
+        )
+
+    # --- GeoPackage ---------------------------------------------------------
+    if gpkg_files:
+        store_type, category = _FORMAT_STORE_MAP["geopackage"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="geopackage",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in sorted(gpkg_files)],
+            )
+        )
+
+    # --- GeoTIFF ------------------------------------------------------------
+    if tif_files:
+        store_type, category = _FORMAT_STORE_MAP["geotiff"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="geotiff",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in sorted(tif_files)],
+            )
+        )
+
+    return groups, warnings
+
+
 # ---------------------------------------------------------------------------
 # Naming
 # ---------------------------------------------------------------------------

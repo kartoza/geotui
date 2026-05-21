@@ -19,7 +19,7 @@ from textual.widgets import (
     Static,
 )
 
-from geotui.config import ConfigManager, Connection
+from geotui.config import ConfigManager, Connection, decrypt_value
 from geotui.i18n import _
 
 
@@ -189,6 +189,20 @@ class SettingsScreen(Screen[None]):
         color: #8A8B8B;
     }
 
+    SettingsScreen #vault-buttons {
+        height: auto;
+        width: 100%;
+        align: center middle;
+        padding: 0 1;
+        dock: bottom;
+        margin: 0 0 1 0;
+    }
+
+    SettingsScreen #vault-buttons Button {
+        margin: 0 1;
+        min-width: 16;
+    }
+
     SettingsScreen #branding {
         dock: bottom;
         height: 1;
@@ -260,6 +274,17 @@ class SettingsScreen(Screen[None]):
                         yield Button(
                             _("Cancel"), id="btn-cancel", classes="btn-default"
                         )
+        with Horizontal(id="vault-buttons"):
+            yield Button(
+                _("Change Password"),
+                id="btn-change-pw",
+                classes="btn-primary",
+            )
+            yield Button(
+                _("Reset Vault"),
+                id="btn-reset-vault",
+                classes="btn-danger",
+            )
         yield Static(
             "Made with \u2764 by Kartoza | Donate! | GitHub",
             id="branding",
@@ -293,6 +318,32 @@ class SettingsScreen(Screen[None]):
         edit.display = mode == "edit"
         self.editing = mode == "edit"
 
+    def _get_vault_key(self):
+        """Get the vault Fernet key from the app."""
+        from geotui.app import GeoTUIApp
+
+        app = self.app
+        if isinstance(app, GeoTUIApp):
+            return app.vault_key
+        return None
+
+    def _decrypt_password(self, encrypted: str) -> str:
+        """Decrypt a connection password using the vault key.
+
+        Args:
+            encrypted: Encrypted password token.
+
+        Returns:
+            Decrypted plaintext, or the original value if no vault.
+        """
+        fernet = self._get_vault_key()
+        if fernet and encrypted:
+            try:
+                return decrypt_value(encrypted, fernet)
+            except Exception:
+                return encrypted
+        return encrypted
+
     def _show_connection_detail(self, conn: Connection) -> None:
         """Display connection details in view mode.
 
@@ -302,7 +353,8 @@ class SettingsScreen(Screen[None]):
         self.query_one("#view-name", Static).update(conn.name or "(unnamed)")
         self.query_one("#view-url", Static).update(conn.url or "(not set)")
         self.query_one("#view-username", Static).update(conn.username or "(not set)")
-        masked = "*" * len(conn.password) if conn.password else "(not set)"
+        pw = self._decrypt_password(conn.password)
+        masked = "*" * len(pw) if pw else "(not set)"
         self.query_one("#view-password", Static).update(masked)
         self._show_mode("view")
 
@@ -315,7 +367,8 @@ class SettingsScreen(Screen[None]):
         self.query_one("#input-name", Input).value = conn.name if conn else ""
         self.query_one("#input-url", Input).value = conn.url if conn else ""
         self.query_one("#input-username", Input).value = conn.username if conn else ""
-        self.query_one("#input-password", Input).value = conn.password if conn else ""
+        pw = self._decrypt_password(conn.password) if conn else ""
+        self.query_one("#input-password", Input).value = pw
         self._show_mode("edit")
         self.query_one("#input-name", Input).focus()
 
@@ -344,6 +397,10 @@ class SettingsScreen(Screen[None]):
             self._save_form()
         elif button_id == "btn-cancel":
             self._cancel_edit()
+        elif button_id == "btn-change-pw":
+            self._change_master_password()
+        elif button_id == "btn-reset-vault":
+            self._reset_vault()
 
     def action_add(self) -> None:
         """Start adding a new connection."""
@@ -395,7 +452,12 @@ class SettingsScreen(Screen[None]):
         from geotui.client import test_connection
 
         self.notify(_("Testing connection..."), severity="information")
-        result = await test_connection(conn)
+        # Decrypt password before testing
+        fernet = self._get_vault_key()
+        test_conn = conn
+        if fernet:
+            test_conn = self._config.decrypt_connection(conn, fernet)
+        result = await test_connection(test_conn)
         if result.success:
             self.notify(result.message, severity="information")
             # Mark this connection as active, deactivate others
@@ -412,6 +474,20 @@ class SettingsScreen(Screen[None]):
                 self.log.warning("Could not update GeoServer tree")
         else:
             self.notify(result.message, severity="error")
+
+    def _encrypt_password(self, plaintext: str) -> str:
+        """Encrypt a password for storage using the vault key.
+
+        Args:
+            plaintext: Password in cleartext.
+
+        Returns:
+            Encrypted token, or original value if no vault.
+        """
+        fernet = self._get_vault_key()
+        if fernet and plaintext:
+            return self._config.encrypt_password(plaintext, fernet)
+        return plaintext
 
     def _save_form(self) -> None:
         """Save the current form data."""
@@ -430,17 +506,22 @@ class SettingsScreen(Screen[None]):
             self.query_one("#input-url", Input).focus()
             return
 
+        # Encrypt the password before storing
+        encrypted_pw = self._encrypt_password(password)
+
         if self.selected_id:
             self._config.update_connection(
                 self.selected_id,
                 name=name,
                 url=url,
                 username=username,
-                password=password,
+                password=encrypted_pw,
             )
             self.notify(f"{name} updated", severity="information")
         else:
-            conn = Connection(name=name, url=url, username=username, password=password)
+            conn = Connection(
+                name=name, url=url, username=username, password=encrypted_pw
+            )
             self._config.add_connection(conn)
             self.selected_id = conn.id
             self.notify(f"{name} added", severity="information")
@@ -458,6 +539,83 @@ class SettingsScreen(Screen[None]):
                 self._show_connection_detail(conn)
                 return
         self._show_mode("empty")
+
+    def _change_master_password(self) -> None:
+        """Change the master password via a two-step prompt."""
+        from geotui.screens.unlock import UnlockScreen
+
+        # First prompt for the old password
+        def handle_old_pw(old_pw: str | None) -> None:
+            if not old_pw:
+                return
+            fernet = self._config.unlock(old_pw)
+            if not fernet:
+                self.notify(_("Current password is wrong"), severity="error")
+                return
+            # Now prompt for the new password
+            def handle_new_pw(new_pw: str | None) -> None:
+                if not new_pw:
+                    return
+                if self._config.change_master_password(old_pw, new_pw):
+                    # Update the app's vault key
+                    from geotui.app import GeoTUIApp
+
+                    app = self.app
+                    if isinstance(app, GeoTUIApp):
+                        app.vault_key = self._config.unlock(new_pw)
+                    self.notify(
+                        _("Master password changed successfully"),
+                        severity="information",
+                    )
+                else:
+                    self.notify(
+                        _("Failed to change password"),
+                        severity="error",
+                    )
+
+            self.app.push_screen(
+                UnlockScreen(is_setup=True), callback=handle_new_pw
+            )
+
+        self.app.push_screen(
+            UnlockScreen(is_setup=False), callback=handle_old_pw
+        )
+
+    def _reset_vault(self) -> None:
+        """Reset the vault after confirmation."""
+        from geotui.screens.confirm import ConfirmScreen
+
+        def handle_confirm(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            self._config.reset_vault()
+            from geotui.app import GeoTUIApp
+
+            app = self.app
+            if isinstance(app, GeoTUIApp):
+                app.vault_key = None
+            self.notify(
+                _("Vault reset. All connections removed."),
+                severity="warning",
+                timeout=10,
+            )
+            self._refresh_list()
+            self._show_mode("empty")
+            # Prompt for new master password
+            app._show_vault_setup()
+
+        self.app.push_screen(
+            ConfirmScreen(
+                _("Reset Vault"),
+                _(
+                    "This will DELETE all saved connections.\n"
+                    "You will need to set a new master password\n"
+                    "and re-enter all your connections.\n\n"
+                    "This cannot be undone!"
+                ),
+            ),
+            callback=handle_confirm,
+        )
 
     def action_go_back(self) -> None:
         """Return to the main screen."""

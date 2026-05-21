@@ -56,23 +56,23 @@ FilePane .pane-header.active {
     color: #1a1a2e;
 }
 
-FilePane DirectoryTree {
+FilePane MCDirectoryTree {
     background: #1a1a2e;
     color: #8A8B8B;
     scrollbar-color: #569FC6;
     scrollbar-background: #16213e;
 }
 
-FilePane DirectoryTree > .directory-tree--folder {
+FilePane MCDirectoryTree > .directory-tree--folder {
     color: #569FC6;
     text-style: bold;
 }
 
-FilePane DirectoryTree > .directory-tree--file {
+FilePane MCDirectoryTree > .directory-tree--file {
     color: #8A8B8B;
 }
 
-FilePane DirectoryTree > .directory-tree--cursor {
+FilePane MCDirectoryTree > .directory-tree--cursor {
     background: #06969A;
     color: #1a1a2e;
     text-style: bold;
@@ -81,6 +81,35 @@ FilePane DirectoryTree > .directory-tree--cursor {
 FilePane .pane-footer {
     background: #16213e;
     color: #8A8B8B;
+}
+
+/* GeoServer Tree Styling */
+GeoServerTree Tree {
+    background: #1a1a2e;
+    color: #8A8B8B;
+    scrollbar-color: #569FC6;
+    scrollbar-background: #16213e;
+}
+
+GeoServerTree Tree > .tree--cursor {
+    background: #06969A;
+    color: #1a1a2e;
+    text-style: bold;
+}
+
+GeoServerTree Tree > .tree--highlight {
+    background: #0f3460;
+    color: #DF9E2F;
+    text-style: bold;
+}
+
+GeoServerTree Tree > .tree--highlight-line {
+    background: #16213e;
+}
+
+GeoServerTree .tree-header.active {
+    background: #DF9E2F;
+    color: #1a1a2e;
 }
 
 StatusBar {

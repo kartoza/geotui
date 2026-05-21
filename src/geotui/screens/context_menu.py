@@ -87,7 +87,6 @@ class ContextMenuScreen(ModalScreen[str | None]):
             opts.add_option(Option(_("Create Store"), id="gs_create_store"))
             opts.add_option(Option(_("Refresh Tree"), id="gs_refresh"))
         else:
-            opts.add_option(Option(_("Create Directory"), id="local_mkdir"))
             opts.add_option(Option(_("Open Reports Folder"), id="local_open_reports"))
 
         opts.focus()

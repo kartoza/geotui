@@ -24,6 +24,7 @@
             pythonPkgs.httpx
             pythonPkgs.pydantic
             pythonPkgs.pydantic-settings
+            pythonPkgs.cryptography
             pythonPkgs.keyring
             pythonPkgs.pytest
             pythonPkgs.pytest-asyncio
@@ -72,7 +73,7 @@
 
         packages.default = pythonPkgs.buildPythonPackage {
           pname = "geotui";
-          version = "0.6.0";
+          version = "0.7.0";
           src = ./.;
           format = "pyproject";
 
@@ -84,6 +85,7 @@
             pythonPkgs.httpx
             pythonPkgs.pydantic
             pythonPkgs.pydantic-settings
+            pythonPkgs.cryptography
             pythonPkgs.keyring
           ];
         };

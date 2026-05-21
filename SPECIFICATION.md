@@ -45,7 +45,7 @@ graph TB
 | Rich Text | Rich |
 | HTTP Client | httpx |
 | Data Validation | Pydantic |
-| Credential Storage | keyring |
+| Credential Encryption | cryptography (Fernet/PBKDF2) |
 | Build System | Hatch |
 | Dev Environment | Nix Flake |
 
@@ -150,10 +150,15 @@ graph TB
 - gettext-based translation system
 
 ### FR-004: Security
-- No plain-text credential storage
-- HTTPS connections enforced
-- Input validation on all user inputs
-- No command injection vectors
+- **Master Password Vault**: All connection passwords encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256) with PBKDF2-HMAC-SHA256 key derivation (600k iterations)
+- **Startup Unlock**: TUI prompts for master password during startup; CLI prompts before accessing connections (3 attempts max)
+- **Vault Setup**: First-time users prompted to create a master password (min 8 characters, confirmation required)
+- **Password Change**: Re-encrypts all stored credentials with new key derived from new password
+- **Vault Reset**: Wipes all connections when master password is forgotten (requires explicit confirmation)
+- **File Permissions**: Config file restricted to 0o600, config directory to 0o700
+- **Input Validation**: GeoServer resource names validated against `[a-zA-Z0-9_.\-]+` regex (max 256 chars)
+- **No Command Injection**: Subprocess calls use list args, no shell=True
+- HTTPS connections enforced (verify=True on all httpx calls)
 
 ### FR-005: Cross-Platform
 - Windows (PowerShell) support

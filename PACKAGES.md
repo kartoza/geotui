@@ -9,7 +9,8 @@
 | **httpx** | >=0.27.0 | Async HTTP client for communicating with GeoServer REST API |
 | **pydantic** | >=2.0.0 | Data validation and settings management |
 | **pydantic-settings** | >=2.0.0 | Configuration management with environment variable support |
-| **keyring** | >=25.0.0 | Secure credential storage using system keyring |
+| **cryptography** | >=42.0.0 | Fernet encryption (AES-128-CBC + HMAC-SHA256) and PBKDF2 key derivation for master password vault |
+| **keyring** | >=25.0.0 | System keyring integration (available for future use) |
 | **fpdf2** | >=2.8.0 | Lightweight PDF generation for publish reports |
 | **click** | >=8.0.0 | CLI framework for publish, export, import-config subcommands |
 
