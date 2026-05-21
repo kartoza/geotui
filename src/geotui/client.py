@@ -943,17 +943,42 @@ class GeoServerClient:
             path += "?recurse=true"
         return await self._delete(path)
 
-    async def delete_layer(self, workspace: str, layer_name: str) -> bool:
-        """Delete a layer.
+    async def delete_layer(
+        self,
+        workspace: str,
+        store: str,
+        layer_name: str,
+        resource_type: str = "layer",
+    ) -> bool:
+        """Delete a layer/coverage and its associated global layer entry.
+
+        Uses the featuretype/coverage endpoint to delete the resource,
+        then removes the global layer reference.
 
         Args:
             workspace: Workspace name.
+            store: Parent store name.
             layer_name: Layer name.
+            resource_type: 'layer' for featuretypes, 'coverage' for coverages.
 
         Returns:
             True if deleted successfully.
         """
-        return await self._delete(f"/rest/layers/{workspace}:{layer_name}")
+        # First delete the global layer entry
+        await self._delete(f"/rest/layers/{layer_name}")
+
+        # Then delete the feature type or coverage from the store
+        if resource_type == "coverage":
+            path = (
+                f"/rest/workspaces/{workspace}/coveragestores"
+                f"/{store}/coverages/{layer_name}?recurse=true"
+            )
+        else:
+            path = (
+                f"/rest/workspaces/{workspace}/datastores"
+                f"/{store}/featuretypes/{layer_name}?recurse=true"
+            )
+        return await self._delete(path)
 
 
 async def test_connection(conn: Connection, timeout: float = 10.0) -> ConnectionResult:

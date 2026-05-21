@@ -959,10 +959,26 @@ class GeoServerTree(Widget):
             )
             return
 
+        # Find parent store name for layer deletion (walk up tree)
+        store_name = ""
+        if resource_type in ("layer", "coverage"):
+            parent = tree.cursor_node.parent
+            while parent:
+                if (
+                    isinstance(parent.data, TreeNodeData)
+                    and parent.data.node_type
+                    in ("datastore", "coveragestore", "wmsstore")
+                ):
+                    store_name = parent.data.name
+                    break
+                parent = parent.parent
+
         def handle_confirm(confirmed: bool | None) -> None:
             if confirmed:
                 self.run_worker(
-                    self._do_delete(conn, resource_type, name, ws_name or ""),
+                    self._do_delete(
+                        conn, resource_type, name, ws_name or "", store_name
+                    ),
                     exit_on_error=False,
                 )
 
@@ -982,7 +998,12 @@ class GeoServerTree(Widget):
         )
 
     async def _do_delete(
-        self, conn: Connection, resource_type: str, name: str, workspace: str
+        self,
+        conn: Connection,
+        resource_type: str,
+        name: str,
+        workspace: str,
+        store: str = "",
     ) -> None:
         """Execute the delete operation.
 
@@ -991,10 +1012,11 @@ class GeoServerTree(Widget):
             resource_type: Type of resource to delete.
             name: Resource name.
             workspace: Parent workspace name.
+            store: Parent store name (for layer/coverage deletion).
         """
         logger.info(
-            "Deleting %s '%s' in workspace '%s' on connection '%s'",
-            resource_type, name, workspace, conn.name,
+            "Deleting %s '%s' (store='%s', workspace='%s') on '%s'",
+            resource_type, name, store, workspace, conn.name,
         )
         try:
             decrypted = self._decrypt_conn(conn)
@@ -1008,7 +1030,9 @@ class GeoServerTree(Widget):
                         workspace, name, recurse=True
                     )
                 elif resource_type in ("layer", "coverage"):
-                    ok = await client.delete_layer(workspace, name)
+                    ok = await client.delete_layer(
+                        workspace, store, name, resource_type
+                    )
                 else:
                     logger.warning("Unknown resource type: %s", resource_type)
                     ok = False
