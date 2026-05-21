@@ -131,7 +131,7 @@ class SpatialFileGroup:
     store_category: str
     """Broad category used for UI grouping."""
 
-    files: list
+    files: list[SpatialFile | ShapefileBundle]
     """List of :class:`SpatialFile` or :class:`ShapefileBundle` instances."""
 
     @property
@@ -728,7 +728,7 @@ async def _upload_bundle(
     Raises:
         RuntimeError: If *config.fail_fast* is ``True`` and the upload fails.
     """
-    source_path = str(bundle.directory / f"{bundle.name}.shp")
+    source_path = bundle.directory / f"{bundle.name}.shp"
 
     async with semaphore:
         if callable(progress_callback):

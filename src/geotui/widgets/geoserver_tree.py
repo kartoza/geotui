@@ -5,8 +5,13 @@ in a tree view, populated from the active connection. Provides actions
 for creating workspaces and stores via the F2 context menu.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from geotui.publisher import SpatialFileGroup
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -425,7 +430,7 @@ class GeoServerTree(Widget):
         self,
         source_dir: Path,
         workspace: str,
-        groups: list,
+        groups: list[SpatialFileGroup],
         warnings: list[str],
     ) -> None:
         """Run copy-to-publish in background for all discovered spatial groups."""
@@ -535,7 +540,7 @@ class GeoServerTree(Widget):
             )
             return
 
-        def handle_confirm(confirmed: bool) -> None:
+        def handle_confirm(confirmed: bool | None) -> None:
             if confirmed:
                 self.run_worker(
                     self._do_delete(resource_type, name, ws_name or ""),
@@ -707,7 +712,7 @@ class GeoServerTree(Widget):
                 ws_count = len(resources)
                 status = self.query_one("#tree-status", Static)
                 status.update(f"{ws_count} workspace(s), {count} total resources")
-            except Exception:  # nosec B110
+            except Exception:
                 if self.is_mounted:
                     status = self.query_one("#tree-status", Static)
                     status.update("[#CC0403]Connection failed[/]")

@@ -1,7 +1,7 @@
 """File pane widget - individual pane in the dual-pane layout."""
 
 import platform
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -139,6 +139,6 @@ class FilePane(Widget):
         else:
             cmd = ["xdg-open", str(path)]
         try:
-            subprocess.Popen(cmd)  # noqa: S603
+            subprocess.Popen(cmd)  # noqa: S603  # nosec B603
         except FileNotFoundError:
             pass
