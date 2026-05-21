@@ -106,7 +106,7 @@ class GeoTUIApp(App[None]):
 
         from geotui.widgets.file_pane import FilePane
 
-        reports_dir = Path.home() / ".local/share/geotui/reports"
+        reports_dir = Path.cwd() / ".geotui" / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
         FilePane.open_file(reports_dir)
 

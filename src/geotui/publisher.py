@@ -131,7 +131,7 @@ class SpatialFileGroup:
     store_category: str
     """Broad category used for UI grouping."""
 
-    files: list
+    files: list[SpatialFile | ShapefileBundle]
     """List of :class:`SpatialFile` or :class:`ShapefileBundle` instances."""
 
     @property
@@ -728,7 +728,7 @@ async def _upload_bundle(
     Raises:
         RuntimeError: If *config.fail_fast* is ``True`` and the upload fails.
     """
-    source_path = str(bundle.directory / f"{bundle.name}.shp")
+    source_path = bundle.directory / f"{bundle.name}.shp"
 
     async with semaphore:
         if callable(progress_callback):
@@ -748,6 +748,15 @@ async def _upload_bundle(
                 elapsed = time.monotonic() - t0
 
                 if success:
+                    # configure=first only runs on store creation; if the layer
+                    # was not auto-configured, create the featuretype explicitly.
+                    if not await client.layer_exists(config.workspace, layer_name):
+                        await client.create_featuretype(
+                            config.workspace,
+                            config.datastore,
+                            bundle.name,
+                            layer_name,
+                        )
                     if style:
                         await client.assign_style(config.workspace, layer_name, style)
                     return BundleResult(

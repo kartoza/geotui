@@ -5,8 +5,13 @@ in a tree view, populated from the active connection. Provides actions
 for creating workspaces and stores via the F2 context menu.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from geotui.publisher import SpatialFileGroup
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -17,6 +22,7 @@ from textual.widgets import (
     Input,
     Label,
     OptionList,
+    ProgressBar,
     Static,
     Tree,
 )
@@ -100,6 +106,20 @@ class GeoServerTree(Widget):
         width: 100%;
         background: $surface;
         color: $text-muted;
+    }
+
+    GeoServerTree #publish-progress {
+        height: auto;
+        width: 100%;
+        padding: 0 1;
+        background: $surface;
+    }
+
+    GeoServerTree .progress-label {
+        height: 1;
+        width: 100%;
+        color: $warning;
+        text-style: bold;
     }
 
     GeoServerTree #no-connection {
@@ -189,6 +209,9 @@ class GeoServerTree(Widget):
             )
             yield Tree("GeoServer", id="gs-tree")
             yield Static("", id="tree-status", classes="tree-footer")
+            with Vertical(id="publish-progress"):
+                yield Label("", id="progress-label", classes="progress-label")
+                yield ProgressBar(total=100, show_eta=False, id="progress-bar")
             with Vertical(id="action-panel"):
                 yield Label("", id="action-title", classes="action-title")
                 for i in range(1, _MAX_FIELDS + 1):
@@ -207,6 +230,7 @@ class GeoServerTree(Widget):
         tree.display = False
         tree.show_root = False
         self._hide_action_panel()
+        self.query_one("#publish-progress").display = False
 
     # ── Action panel management ────────────────────────────
 
@@ -392,6 +416,10 @@ class GeoServerTree(Widget):
             severity="information",
         )
 
+        # Warn about incomplete bundles that were skipped during discovery.
+        for warning in warnings:
+            self.app.notify(warning, severity="warning", timeout=15)
+
         # Run the publish in a background worker.
         self.run_worker(
             self._run_copy_publish(source_dir, workspace, groups, warnings),
@@ -402,7 +430,7 @@ class GeoServerTree(Widget):
         self,
         source_dir: Path,
         workspace: str,
-        groups: list,
+        groups: list[SpatialFileGroup],
         warnings: list[str],
     ) -> None:
         """Run copy-to-publish in background for all discovered spatial groups."""
@@ -413,6 +441,11 @@ class GeoServerTree(Widget):
             return
 
         total_groups = len(groups)
+        progress_panel = self.query_one("#publish-progress")
+        progress_bar = self.query_one("#progress-bar", ProgressBar)
+        progress_label = self.query_one("#progress-label", Label)
+        progress_panel.display = True
+
         for idx, group in enumerate(groups, start=1):
             store_name = f"{source_dir.name}_{group.format_type}"
 
@@ -430,8 +463,11 @@ class GeoServerTree(Widget):
                 current: int, total: int, name: str, _gi: int = group_idx
             ) -> None:
                 if self.is_mounted:
-                    status = self.query_one("#tree-status", Static)
-                    status.update(
+                    progress_bar.update(total=total, progress=current)
+                    progress_label.update(
+                        f"[{_gi}/{total_groups}] {current}/{total}: {name}"
+                    )
+                    self.query_one("#tree-status", Static).update(
                         f"[{_gi}/{total_groups}] Publishing {current}/{total}: {name}"
                     )
 
@@ -439,12 +475,15 @@ class GeoServerTree(Widget):
             if self.is_mounted:
                 self.refresh_tree()
 
+        progress_panel.display = False
+
         # Generate reports after all groups are done.
         if self.is_mounted and self.connection is not None:
             from datetime import datetime, timezone
 
             ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
-            out_dir = Path.home() / ".local/share/geotui/reports"
+            out_dir = Path.cwd() / ".geotui" / "reports"
+            out_dir.mkdir(parents=True, exist_ok=True)
             pdf_path = out_dir / f"publish-{ts}.pdf"
             json_path = out_dir / f"publish-{ts}.json"
 
@@ -501,7 +540,7 @@ class GeoServerTree(Widget):
             )
             return
 
-        def handle_confirm(confirmed: bool) -> None:
+        def handle_confirm(confirmed: bool | None) -> None:
             if confirmed:
                 self.run_worker(
                     self._do_delete(resource_type, name, ws_name or ""),
@@ -673,7 +712,7 @@ class GeoServerTree(Widget):
                 ws_count = len(resources)
                 status = self.query_one("#tree-status", Static)
                 status.update(f"{ws_count} workspace(s), {count} total resources")
-            except Exception:  # nosec B110
+            except Exception:
                 if self.is_mounted:
                     status = self.query_one("#tree-status", Static)
                     status.update("[#CC0403]Connection failed[/]")
