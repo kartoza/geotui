@@ -228,6 +228,8 @@ class GeoServerClient:
         self._auth = httpx.BasicAuth(conn.username, conn.password)
         self._resolved = False
         self._client: httpx.AsyncClient | None = None
+        self._last_response_text = ""
+        self._last_status_code = 0
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         """Get or create the shared HTTP client."""
@@ -606,8 +608,12 @@ class GeoServerClient:
                 auth=self._auth,
                 headers={"Content-Type": content_type},
             )
+            self._last_response_text = response.text[:1024]
+            self._last_status_code = response.status_code
             return response.status_code
-        except httpx.RequestError:
+        except httpx.RequestError as e:
+            self._last_response_text = str(e)
+            self._last_status_code = 0
             return 0
 
     async def _put_json(self, path: str, json_data: dict[str, Any]) -> bool:
@@ -695,6 +701,99 @@ class GeoServerClient:
         status = await self._put(path, zip_data, "application/zip")
         return status in (200, 201)
 
+    async def create_featuretype(
+        self,
+        workspace: str,
+        store: str,
+        native_name: str,
+        layer_name: str,
+    ) -> bool:
+        """Explicitly configure a feature type in an existing datastore.
+
+        Required when uploading additional shapefiles to a datastore that was
+        already created — GeoServer's configure=first only runs on store creation.
+
+        Args:
+            workspace: Target workspace name.
+            store: Target datastore name.
+            native_name: Shapefile stem (must match the file on disk).
+            layer_name: Desired GeoServer layer name.
+
+        Returns:
+            True if the feature type was created (HTTP 201) or already existed.
+        """
+        path = f"/rest/workspaces/{workspace}/datastores/{store}/featuretypes"
+        payload = {"featureType": {"name": layer_name, "nativeName": native_name}}
+        return await self._post(path, payload)
+
+    async def upload_gpkg(
+        self,
+        workspace: str,
+        store: str,
+        data: bytes,
+        update: bool = False,
+    ) -> bool:
+        """Upload a GeoPackage file to a datastore.
+
+        Args:
+            workspace: Workspace name.
+            store: Datastore name.
+            data: GeoPackage file bytes.
+            update: If True, overwrite existing.
+
+        Returns:
+            True if upload succeeded.
+        """
+        path = (
+            f"/rest/workspaces/{workspace}/datastores/{store}/file.gpkg?configure=first"
+        )
+        if update:
+            path += "&update=overwrite"
+        status = await self._put(path, data, "application/x-gpkg")
+        return status in (200, 201)
+
+    async def upload_geotiff(
+        self,
+        workspace: str,
+        store: str,
+        data: bytes,
+        update: bool = False,
+    ) -> bool:
+        """Upload a GeoTIFF file to a coverage store.
+
+        Args:
+            workspace: Workspace name.
+            store: Coverage store name.
+            data: GeoTIFF file bytes.
+            update: If True, overwrite existing.
+
+        Returns:
+            True if upload succeeded.
+        """
+        path = (
+            f"/rest/workspaces/{workspace}/coveragestores/{store}"
+            f"/file.geotiff?configure=first"
+        )
+        if update:
+            path += "&update=overwrite"
+        status = await self._put(path, data, "image/tiff")
+        return status in (200, 201)
+
+    async def recalculate_bbox(self, workspace: str, layer_name: str) -> bool:
+        """Recalculate bounding box for a layer.
+
+        Args:
+            workspace: Workspace name.
+            layer_name: Layer name.
+
+        Returns:
+            True if successful.
+        """
+        return await self._put_json(
+            f"/rest/layers/{workspace}:{layer_name}.json",
+            {"layer": {"resource": {"recalculate": "nativebbox,latlonbbox"}}},
+        )
+
     async def assign_style(
         self, workspace: str, layer_name: str, style_name: str
     ) -> bool:
@@ -716,6 +815,90 @@ class GeoServerClient:
                 }
             },
         )
+
+    # ── Delete operations ──────────────────────────────────
+
+    async def _delete(self, path: str) -> bool:
+        """Make an authenticated DELETE request.
+
+        Args:
+            path: API path relative to base URL.
+
+        Returns:
+            True if the request returned 200 OK.
+        """
+        client = await self._ensure_client()
+        try:
+            response = await client.delete(
+                f"{self._base_url}{path}",
+                auth=self._auth,
+            )
+            return response.status_code == 200
+        except httpx.RequestError:
+            return False
+
+    async def delete_datastore(
+        self, workspace: str, store: str, recurse: bool = False
+    ) -> bool:
+        """Delete a datastore.
+
+        Args:
+            workspace: Workspace name.
+            store: Datastore name.
+            recurse: If True, also delete contained layers.
+
+        Returns:
+            True if deleted successfully.
+        """
+        path = f"/rest/workspaces/{workspace}/datastores/{store}"
+        if recurse:
+            path += "?recurse=true"
+        return await self._delete(path)
+
+    async def delete_coveragestore(
+        self, workspace: str, store: str, recurse: bool = False
+    ) -> bool:
+        """Delete a coverage store.
+
+        Args:
+            workspace: Workspace name.
+            store: Coverage store name.
+            recurse: If True, also delete contained coverages.
+
+        Returns:
+            True if deleted successfully.
+        """
+        path = f"/rest/workspaces/{workspace}/coveragestores/{store}"
+        if recurse:
+            path += "?recurse=true"
+        return await self._delete(path)
+
+    async def delete_workspace(self, workspace: str, recurse: bool = False) -> bool:
+        """Delete a workspace.
+
+        Args:
+            workspace: Workspace name.
+            recurse: If True, also delete all contained stores and layers.
+
+        Returns:
+            True if deleted successfully.
+        """
+        path = f"/rest/workspaces/{workspace}"
+        if recurse:
+            path += "?recurse=true"
+        return await self._delete(path)
+
+    async def delete_layer(self, workspace: str, layer_name: str) -> bool:
+        """Delete a layer.
+
+        Args:
+            workspace: Workspace name.
+            layer_name: Layer name.
+
+        Returns:
+            True if deleted successfully.
+        """
+        return await self._delete(f"/rest/layers/{workspace}:{layer_name}")
 
 
 async def test_connection(conn: Connection, timeout: float = 10.0) -> ConnectionResult:

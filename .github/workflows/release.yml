@@ -10,48 +10,243 @@ permissions:
   id-token: write
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.12"]
+  # ── Python wheel + sdist ─────────────────────────────────
+  build-python:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install build tools
-        run: pip install build
-      - name: Build package
-        run: python -m build
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          python-version: "3.12"
+      - name: Build wheel and sdist
+        run: pip install build && python -m build
+      - uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.os }}
+          name: python-dist
           path: dist/
 
-  publish:
-    needs: build
+  # ── Standalone binaries via PyInstaller ──────────────────
+  build-binary:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: geotui-linux-amd64
+            binary: dist/geotui
+          - os: macos-latest
+            artifact: geotui-macos-amd64
+            binary: dist/geotui
+          - os: windows-latest
+            artifact: geotui-windows-amd64.exe
+            binary: dist/geotui.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]" pyinstaller
+      - name: Build standalone binary
+        run: |
+          pyinstaller --onefile \
+            --name geotui \
+            --add-data "src/geotui/styles:geotui/styles" \
+            --add-data "src/geotui/i18n:geotui/i18n" \
+            src/geotui/__main__.py
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+
+  # ── Debian .deb package ──────────────────────────────────
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          pip install -e ".[dev]" pyinstaller
+          sudo apt-get update && sudo apt-get install -y dpkg-dev
+      - name: Build binary
+        run: |
+          pyinstaller --onefile \
+            --name geotui \
+            --add-data "src/geotui/styles:geotui/styles" \
+            --add-data "src/geotui/i18n:geotui/i18n" \
+            src/geotui/__main__.py
+      - name: Package as .deb
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p pkg/DEBIAN
+          mkdir -p pkg/usr/local/bin
+          cp dist/geotui pkg/usr/local/bin/geotui
+          chmod 755 pkg/usr/local/bin/geotui
+          cat > pkg/DEBIAN/control << EOF
+          Package: geotui
+          Version: ${VERSION}
+          Section: science
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Kartoza (Pty) Ltd <info@kartoza.com>
+          Description: Midnight Commander-style TUI for GeoServer management
+           A beautiful terminal user interface for managing GeoServer instances.
+           Built with Python/Textual. Supports shapefile, GeoPackage, and
+           GeoTIFF publishing with PDF reports.
+          Homepage: https://github.com/kartoza/geotui
+          EOF
+          dpkg-deb --build pkg geotui_${VERSION}_amd64.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-deb
+          path: "*.deb"
+
+  # ── RPM package ──────────────────────────────────────────
+  build-rpm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          pip install -e ".[dev]" pyinstaller
+          sudo apt-get update && sudo apt-get install -y rpm
+      - name: Build binary
+        run: |
+          pyinstaller --onefile \
+            --name geotui \
+            --add-data "src/geotui/styles:geotui/styles" \
+            --add-data "src/geotui/i18n:geotui/i18n" \
+            src/geotui/__main__.py
+      - name: Package as .rpm
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p rpmbuild/BUILDROOT/geotui-${VERSION}-1.x86_64/usr/local/bin
+          cp dist/geotui rpmbuild/BUILDROOT/geotui-${VERSION}-1.x86_64/usr/local/bin/
+          chmod 755 rpmbuild/BUILDROOT/geotui-${VERSION}-1.x86_64/usr/local/bin/geotui
+          cat > rpmbuild/SPECS/geotui.spec << EOF
+          Name: geotui
+          Version: ${VERSION}
+          Release: 1
+          Summary: Midnight Commander-style TUI for GeoServer management
+          License: MIT
+          URL: https://github.com/kartoza/geotui
+          Group: Applications/Science
+
+          %description
+          A beautiful terminal user interface for managing GeoServer instances.
+
+          %files
+          /usr/local/bin/geotui
+          EOF
+          rpmbuild --define "_topdir $(pwd)/rpmbuild" \
+            -bb rpmbuild/SPECS/geotui.spec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-rpm
+          path: rpmbuild/RPMS/**/*.rpm
+
+  # ── AppImage ─────────────────────────────────────────────
+  build-appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          pip install -e ".[dev]" pyinstaller
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+      - name: Build binary
+        run: |
+          pyinstaller --onefile \
+            --name geotui \
+            --add-data "src/geotui/styles:geotui/styles" \
+            --add-data "src/geotui/i18n:geotui/i18n" \
+            src/geotui/__main__.py
+      - name: Package as AppImage
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p GeoTUI.AppDir/usr/bin
+          cp dist/geotui GeoTUI.AppDir/usr/bin/
+          chmod 755 GeoTUI.AppDir/usr/bin/geotui
+
+          cat > GeoTUI.AppDir/AppRun << 'APPRUN'
+          #!/usr/bin/env bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          exec "${HERE}/usr/bin/geotui" "$@"
+          APPRUN
+          chmod +x GeoTUI.AppDir/AppRun
+
+          cat > GeoTUI.AppDir/geotui.desktop << EOF
+          [Desktop Entry]
+          Name=GeoTUI
+          Exec=geotui
+          Icon=geotui
+          Type=Application
+          Categories=Science;Geography;
+          Comment=Midnight Commander-style TUI for GeoServer
+          Terminal=true
+          EOF
+
+          # Placeholder icon (1x1 PNG)
+          convert -size 256x256 xc:transparent GeoTUI.AppDir/geotui.png 2>/dev/null || \
+            touch GeoTUI.AppDir/geotui.png
+
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage GeoTUI.AppDir \
+            GeoTUI-${VERSION}-x86_64.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-appimage
+          path: "*.AppImage"
+
+  # ── Publish to PyPI ──────────────────────────────────────
+  publish-pypi:
+    needs: build-python
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dist-ubuntu-latest
+          name: python-dist
           path: dist/
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
+  # ── GitHub Release with all artifacts ────────────────────
   github-release:
-    needs: build
+    needs:
+      - build-python
+      - build-binary
+      - build-deb
+      - build-rpm
+      - build-appimage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
+      - name: List artifacts
+        run: find artifacts/ -type f | sort
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          files: artifacts/**/*
+          files: |
+            artifacts/python-dist/*
+            artifacts/geotui-linux-amd64/*
+            artifacts/geotui-macos-amd64/*
+            artifacts/geotui-windows-amd64.exe/*
+            artifacts/geotui-deb/*
+            artifacts/geotui-rpm/**/*
+            artifacts/geotui-appimage/*

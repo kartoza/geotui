@@ -98,6 +98,50 @@ class ShapefileBundle:
         return data
 
 
+@dataclass(frozen=True)
+class SpatialFile:
+    """A single spatial file (GeoPackage, GeoTIFF, etc.)."""
+
+    name: str
+    """The file stem (without extension), e.g. ``parcels``."""
+
+    path: Path
+    """Absolute path to the file."""
+
+    size: int
+    """File size in bytes."""
+
+    @classmethod
+    def from_path(cls, path: Path) -> SpatialFile:
+        """Construct a :class:`SpatialFile` from a filesystem path."""
+        return cls(name=path.stem, path=path, size=path.stat().st_size)
+
+
+@dataclass
+class SpatialFileGroup:
+    """A collection of spatial files sharing the same format type."""
+
+    format_type: str
+    """Logical format identifier, e.g. ``"shapefile"``, ``"geopackage"``,
+    ``"geotiff"``."""
+
+    store_type: str
+    """GeoServer store type string for this format."""
+
+    store_category: str
+    """Broad category used for UI grouping."""
+
+    files: list[SpatialFile | ShapefileBundle]
+    """List of :class:`SpatialFile` or :class:`ShapefileBundle` instances."""
+
+    @property
+    def total_size(self) -> int:
+        """Sum of byte sizes of all files in the group."""
+        return sum(
+            f.total_size if hasattr(f, "total_size") else f.size for f in self.files
+        )
+
+
 @dataclass
 class BundleResult:
     """Outcome of publishing a single :class:`ShapefileBundle`."""
@@ -279,6 +323,86 @@ def discover_bundles(
 
 
 # ---------------------------------------------------------------------------
+# Multi-format discovery constants
+# ---------------------------------------------------------------------------
+
+_GEOTIFF_EXTENSIONS: frozenset[str] = frozenset({".tif", ".tiff"})
+
+_FORMAT_STORE_MAP: dict[str, tuple[str, str]] = {
+    "shapefile": ("Directory of spatial files (shapefiles)", "vector"),
+    "geopackage": ("GeoPackage", "vector"),
+    "geotiff": ("GeoTIFF", "raster"),
+}
+
+
+def discover_spatial_files(
+    directory: Path,
+) -> tuple[list[SpatialFileGroup], list[str]]:
+    """Scan *directory* (non-recursively) for all supported spatial formats.
+
+    Discovers shapefiles (via :func:`discover_bundles`), GeoPackage (``.gpkg``),
+    and GeoTIFF (``.tif`` / ``.tiff``) files.  Results are grouped by format.
+    Empty format groups are omitted.
+
+    Parameters
+    ----------
+    directory:
+        Directory to scan (no recursion).
+
+    Returns
+    -------
+    tuple[list[SpatialFileGroup], list[str]]
+        A pair of ``(groups, warning_messages)``.  Warnings originate from
+        incomplete shapefile bundles.
+    """
+    groups: list[SpatialFileGroup] = []
+
+    # --- Shapefiles ---------------------------------------------------------
+    shp_bundles, warnings = discover_bundles(directory, recurse=False)
+    if shp_bundles:
+        store_type, category = _FORMAT_STORE_MAP["shapefile"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="shapefile",
+                store_type=store_type,
+                store_category=category,
+                files=list(shp_bundles),
+            )
+        )
+
+    # --- GeoPackage ---------------------------------------------------------
+    gpkg_files = sorted(directory.glob("*.gpkg"))
+    if gpkg_files:
+        store_type, category = _FORMAT_STORE_MAP["geopackage"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="geopackage",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in gpkg_files],
+            )
+        )
+
+    # --- GeoTIFF ------------------------------------------------------------
+    tif_files: list[Path] = []
+    for ext in sorted(_GEOTIFF_EXTENSIONS):
+        tif_files.extend(directory.glob(f"*{ext}"))
+    tif_files.sort()
+    if tif_files:
+        store_type, category = _FORMAT_STORE_MAP["geotiff"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="geotiff",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in tif_files],
+            )
+        )
+
+    return groups, warnings
+
+
+# ---------------------------------------------------------------------------
 # Naming
 # ---------------------------------------------------------------------------
 
@@ -412,6 +536,22 @@ async def run_publish(
                 return layer_name
         return None
 
+    # Build BundleResult entries for skipped (incomplete) bundles from warnings.
+    skipped_results: list[BundleResult] = []
+    for warning_msg in disc_warnings:
+        name = ""
+        if "'" in warning_msg:
+            name = warning_msg.split("'")[1]
+        skipped_results.append(
+            BundleResult(
+                layer_name=name,
+                source_path=Path(name),
+                action="skip",
+                status="skipped",
+                error=warning_msg,
+            )
+        )
+
     # Dry-run: return DRY_RUN results immediately without touching GeoServer.
     if config.dry_run:
         results = [
@@ -423,6 +563,7 @@ async def run_publish(
             )
             for bundle, layer_name in name_map.items()
         ]
+        results.extend(skipped_results)
         report = PublishReport(
             config=config,
             geoserver_url=conn.url,
@@ -447,6 +588,7 @@ async def run_publish(
             )
             for bundle, layer_name in name_map.items()
         ]
+        results.extend(skipped_results)
         report = PublishReport(
             config=config,
             geoserver_url=conn.url,
@@ -503,6 +645,9 @@ async def run_publish(
                 logger.exception("Unexpected error in upload task: %s", outcome)
             else:
                 report.results.append(outcome)
+
+        # Append skipped (incomplete) bundles so they appear in the report.
+        report.results.extend(skipped_results)
 
     report.wall_clock_seconds = time.monotonic() - start
     return report
@@ -567,19 +712,10 @@ async def _ensure_datastore(
                 f"type '{store_type}'. Expected one of {sorted(compatible)}."
             )
             return False
-        return True
-
-    # Datastore does not exist - create a Shapefile directory store.
-    logger.info("Creating datastore '%s'", config.datastore)
-    created = await client.create_datastore(
-        workspace=config.workspace,
-        name=config.datastore,
-        store_type="Directory of spatial files (shapefiles)",
-        params={"url": f"file:data/{config.datastore}"},
-    )
-    if not created:
-        report.warnings.append(f"Failed to create datastore '{config.datastore}'")
-        return False
+    # If the datastore doesn't exist yet, GeoServer will auto-create it
+    # when the first shapefile ZIP is uploaded via the file.shp endpoint.
+    # Pre-creating a "Directory of spatial files" store causes HTTP 500
+    # because it conflicts with the file upload mechanism.
     return True
 
 
@@ -633,6 +769,15 @@ async def _upload_bundle(
                 elapsed = time.monotonic() - t0
 
                 if success:
+                    # configure=first only runs on store creation; if the layer
+                    # was not auto-configured, create the featuretype explicitly.
+                    if not await client.layer_exists(config.workspace, layer_name):
+                        await client.create_featuretype(
+                            config.workspace,
+                            config.datastore,
+                            bundle.name,
+                            layer_name,
+                        )
                     if style:
                         await client.assign_style(config.workspace, layer_name, style)
                     return BundleResult(
@@ -644,7 +789,10 @@ async def _upload_bundle(
                         upload_time=elapsed,
                     )
 
-                last_error = "Upload returned failure status"
+                last_error = (
+                    f"HTTP {client._last_status_code}: "
+                    f"{client._last_response_text[:200]}"
+                )
 
             except Exception as exc:
                 last_error = str(exc)

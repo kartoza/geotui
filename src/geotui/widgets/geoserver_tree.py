@@ -5,8 +5,13 @@ in a tree view, populated from the active connection. Provides actions
 for creating workspaces and stores via the F2 context menu.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from geotui.publisher import SpatialFileGroup
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -17,6 +22,7 @@ from textual.widgets import (
     Input,
     Label,
     OptionList,
+    ProgressBar,
     Static,
     Tree,
 )
@@ -100,6 +106,20 @@ class GeoServerTree(Widget):
         width: 100%;
         background: $surface;
         color: $text-muted;
+    }
+
+    GeoServerTree #publish-progress {
+        height: auto;
+        width: 100%;
+        padding: 0 1;
+        background: $surface;
+    }
+
+    GeoServerTree .progress-label {
+        height: 1;
+        width: 100%;
+        color: $warning;
+        text-style: bold;
     }
 
     GeoServerTree #no-connection {
@@ -189,6 +209,9 @@ class GeoServerTree(Widget):
             )
             yield Tree("GeoServer", id="gs-tree")
             yield Static("", id="tree-status", classes="tree-footer")
+            with Vertical(id="publish-progress"):
+                yield Label("", id="progress-label", classes="progress-label")
+                yield ProgressBar(total=100, show_eta=False, id="progress-bar")
             with Vertical(id="action-panel"):
                 yield Label("", id="action-title", classes="action-title")
                 for i in range(1, _MAX_FIELDS + 1):
@@ -207,6 +230,7 @@ class GeoServerTree(Widget):
         tree.display = False
         tree.show_root = False
         self._hide_action_panel()
+        self.query_one("#publish-progress").display = False
 
     # ── Action panel management ────────────────────────────
 
@@ -339,22 +363,224 @@ class GeoServerTree(Widget):
             st.fields,
         )
 
-    def action_bulk_publish(self) -> None:
-        """Show the bulk publish configuration form."""
+    def action_copy_from_local(self) -> None:
+        """Copy spatial files from the local pane to GeoServer (F5 handler)."""
+        from geotui.publisher import discover_spatial_files
+        from geotui.widgets.file_pane import FilePane
+
         if not self.connection:
             self.app.notify(_("No connection active"), severity="warning")
             return
-        self._current_action = "bulk_publish"
-        self._show_fields(
-            _("Bulk Publish Shapefiles"),
-            [
-                ("workspace", _("Workspace"), "my_workspace"),
-                ("datastore", _("Datastore"), "my_datastore"),
-                ("source", _("Source Directory"), str(Path.home())),
-                ("naming", _("Naming (basename/path_slug)"), "basename"),
-                ("concurrency", _("Concurrency"), "4"),
-            ],
+
+        # Get source path from left pane.
+        try:
+            file_pane = self.app.query_one("#left-pane", FilePane)
+            source_dir = file_pane.get_selected_path()
+        except Exception:
+            self.app.notify(
+                _("Cannot read the local file pane"),
+                severity="error",
+            )
+            return
+
+        if not source_dir.is_dir():
+            self.app.notify(
+                _("Selected path is not a directory"),
+                severity="warning",
+            )
+            return
+
+        # Get selected workspace from tree.
+        workspace = self._get_selected_workspace()
+        if not workspace:
+            self.app.notify(
+                _("Select a workspace in the tree first"),
+                severity="warning",
+            )
+            return
+
+        # Discover spatial files.
+        groups, warnings = discover_spatial_files(source_dir)
+        if not groups:
+            self.app.notify(
+                _("No spatial files found in ") + str(source_dir),
+                severity="warning",
+            )
+            return
+
+        # Summarise what was found.
+        total_files = sum(len(g.files) for g in groups)
+        formats = ", ".join(g.format_type for g in groups)
+        self.app.notify(
+            f"Found {total_files} file(s) [{formats}] in {source_dir.name}",
+            severity="information",
         )
+
+        # Warn about incomplete bundles that were skipped during discovery.
+        for warning in warnings:
+            self.app.notify(warning, severity="warning", timeout=15)
+
+        # Run the publish in a background worker.
+        self.run_worker(
+            self._run_copy_publish(source_dir, workspace, groups, warnings),
+            exit_on_error=False,
+        )
+
+    async def _run_copy_publish(
+        self,
+        source_dir: Path,
+        workspace: str,
+        groups: list[SpatialFileGroup],
+        warnings: list[str],
+    ) -> None:
+        """Run copy-to-publish in background for all discovered spatial groups."""
+        from geotui.publisher import NamingStrategy, PublishConfig, run_publish
+        from geotui.report import generate_json_report, generate_pdf_report
+
+        if self.connection is None:
+            return
+
+        total_groups = len(groups)
+        progress_panel = self.query_one("#publish-progress")
+        progress_bar = self.query_one("#progress-bar", ProgressBar)
+        progress_label = self.query_one("#progress-label", Label)
+        progress_panel.display = True
+
+        for idx, group in enumerate(groups, start=1):
+            store_name = f"{source_dir.name}_{group.format_type}"
+
+            config = PublishConfig(
+                workspace=workspace,
+                datastore=store_name,
+                source_directory=source_dir,
+                naming=NamingStrategy.BASENAME,
+                concurrency=4,
+            )
+
+            group_idx = idx  # bind loop variable for closure
+
+            def progress(
+                current: int, total: int, name: str, _gi: int = group_idx
+            ) -> None:
+                if self.is_mounted:
+                    progress_bar.update(total=total, progress=current)
+                    progress_label.update(
+                        f"[{_gi}/{total_groups}] {current}/{total}: {name}"
+                    )
+                    self.query_one("#tree-status", Static).update(
+                        f"[{_gi}/{total_groups}] Publishing {current}/{total}: {name}"
+                    )
+
+            report = await run_publish(self.connection, config, progress)
+            if self.is_mounted:
+                self.refresh_tree()
+
+        progress_panel.display = False
+
+        # Generate reports after all groups are done.
+        if self.is_mounted and self.connection is not None:
+            from datetime import datetime, timezone
+
+            ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
+            out_dir = Path.cwd() / ".geotui" / "reports"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            pdf_path = out_dir / f"publish-{ts}.pdf"
+            json_path = out_dir / f"publish-{ts}.json"
+
+            # Use the last report for summary generation.
+            generate_pdf_report(report, pdf_path)
+            generate_json_report(report, json_path)
+
+            summary = (
+                f"Published {total_groups} group(s) to '{workspace}'\n"
+                f"Report: {pdf_path}"
+            )
+            self.app.notify(summary, severity="information", timeout=10)
+            self._hide_action_panel()
+
+    def action_delete_selected(self) -> None:
+        """Delete the selected resource after confirmation."""
+        if not self.connection:
+            self.app.notify(_("No connection active"), severity="warning")
+            return
+
+        tree = self.query_one("#gs-tree", Tree)
+        if not tree.cursor_node or not tree.cursor_node.data:
+            self.app.notify(_("Select a resource to delete"), severity="warning")
+            return
+
+        data = tree.cursor_node.data
+        if not isinstance(data, GeoServerResource):
+            return
+
+        resource_type = data.resource_type
+        name = data.name
+
+        # Find parent workspace for stores/layers
+        ws_name = self._get_selected_workspace()
+        if not ws_name and resource_type != "workspace":
+            self.app.notify(_("Cannot determine workspace"), severity="error")
+            return
+
+        from geotui.screens.confirm import ConfirmScreen
+
+        if resource_type == "workspace":
+            msg = f"Delete workspace '{name}' and ALL its stores and layers?"
+        elif resource_type in ("datastore", "coveragestore", "wmsstore"):
+            msg = (
+                f"Delete {resource_type} '{name}' and all its "
+                f"layers in workspace '{ws_name}'?"
+            )
+        elif resource_type in ("layer", "coverage"):
+            msg = f"Delete layer '{name}' from workspace '{ws_name}'?"
+        else:
+            self.app.notify(
+                _("Cannot delete this resource type"),
+                severity="warning",
+            )
+            return
+
+        def handle_confirm(confirmed: bool | None) -> None:
+            if confirmed:
+                self.run_worker(
+                    self._do_delete(resource_type, name, ws_name or ""),
+                    exit_on_error=False,
+                )
+
+        self.app.push_screen(
+            ConfirmScreen(_("Confirm Delete"), msg),
+            callback=handle_confirm,
+        )
+
+    async def _do_delete(self, resource_type: str, name: str, workspace: str) -> None:
+        """Execute the delete operation.
+
+        Args:
+            resource_type: Type of resource to delete.
+            name: Resource name.
+            workspace: Parent workspace name.
+        """
+        if self.connection is None:
+            return
+
+        async with GeoServerClient(self.connection) as client:
+            if resource_type == "workspace":
+                ok = await client.delete_workspace(name, recurse=True)
+            elif resource_type == "datastore":
+                ok = await client.delete_datastore(workspace, name, recurse=True)
+            elif resource_type == "coveragestore":
+                ok = await client.delete_coveragestore(workspace, name, recurse=True)
+            elif resource_type in ("layer", "coverage"):
+                ok = await client.delete_layer(workspace, name)
+            else:
+                ok = False
+
+        if self.is_mounted:
+            if ok:
+                self.app.notify(f"Deleted '{name}'", severity="information")
+                self.refresh_tree()
+            else:
+                self.app.notify(f"Failed to delete '{name}'", severity="error")
 
     def action_refresh(self) -> None:
         """Refresh the tree."""
@@ -387,62 +613,6 @@ class GeoServerTree(Widget):
                 self._create_store(self._selected_store_type, values),
                 exit_on_error=False,
             )
-        elif self._current_action == "bulk_publish":
-            fields = [
-                ("workspace", "", ""),
-                ("datastore", "", ""),
-                ("source", "", ""),
-                ("naming", "", ""),
-                ("concurrency", "", ""),
-            ]
-            values = self._get_field_values(fields)
-            if not values.get("workspace"):
-                self.app.notify(_("Workspace is required"), severity="error")
-                return
-            if not values.get("datastore"):
-                self.app.notify(_("Datastore is required"), severity="error")
-                return
-            self.run_worker(self._run_bulk_publish(values), exit_on_error=False)
-
-    async def _run_bulk_publish(self, values: dict[str, str]) -> None:
-        """Run bulk publish in background."""
-        from geotui.publisher import NamingStrategy, PublishConfig, run_publish
-        from geotui.report import generate_json_report, generate_pdf_report
-
-        config = PublishConfig(
-            workspace=values.get("workspace", ""),
-            datastore=values.get("datastore", ""),
-            source_directory=Path(values.get("source", str(Path.home()))),
-            naming=NamingStrategy(values.get("naming", "basename")),
-            concurrency=int(values.get("concurrency", "4")),
-        )
-
-        def progress(current: int, total: int, name: str) -> None:
-            if self.is_mounted:
-                status = self.query_one("#tree-status", Static)
-                status.update(f"Publishing {current}/{total}: {name}")
-
-        if self.connection is None:
-            return
-        report = await run_publish(self.connection, config, progress)
-
-        if self.is_mounted:
-            from datetime import datetime, timezone
-
-            ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
-            out_dir = Path.home() / ".local/share/geotui/reports"
-            pdf_path = out_dir / f"publish-{ts}.pdf"
-            json_path = out_dir / f"publish-{ts}.json"
-            generate_pdf_report(report, pdf_path)
-            generate_json_report(report, json_path)
-
-            summary = (
-                f"Created: {report.created} | Updated: {report.updated} | "
-                f"Failed: {report.failed}\nReport: {pdf_path}"
-            )
-            self.app.notify(summary, severity="information", timeout=10)
-            self._hide_action_panel()
-            self.refresh_tree()
 
     async def _create_workspace(self, name: str) -> None:
         """Create a workspace via the API."""
@@ -542,7 +712,7 @@ class GeoServerTree(Widget):
                 ws_count = len(resources)
                 status = self.query_one("#tree-status", Static)
                 status.update(f"{ws_count} workspace(s), {count} total resources")
-            except Exception:  # nosec B110
+            except Exception:
                 if self.is_mounted:
                     status = self.query_one("#tree-status", Static)
                     status.update("[#CC0403]Connection failed[/]")

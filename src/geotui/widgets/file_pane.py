@@ -1,5 +1,7 @@
 """File pane widget - individual pane in the dual-pane layout."""
 
+import platform
+import subprocess  # nosec B404
 from pathlib import Path
 
 from textual.app import ComposeResult
@@ -11,6 +13,10 @@ from textual.widgets import DirectoryTree, Label, Static
 
 class FilePane(Widget):
     """A single file browser pane with directory tree and details."""
+
+    BINDINGS = [
+        ("backspace", "go_up", "Parent Dir"),
+    ]
 
     DEFAULT_CSS = """
     FilePane {
@@ -52,7 +58,7 @@ class FilePane(Widget):
     """
 
     is_active: reactive[bool] = reactive(False)
-    current_path: reactive[str] = reactive(str(Path.home()))
+    current_path: reactive[str] = reactive(str(Path.cwd()))
 
     def __init__(
         self,
@@ -88,8 +94,75 @@ class FilePane(Widget):
             footer = self.query_one(".pane-footer", Static)
             footer.update(value)
 
+    def get_selected_path(self) -> Path:
+        """Get the path of the highlighted item in the tree.
+
+        If the cursor is on a directory, returns that directory.
+        If on a file, returns its parent directory.
+        Falls back to current_path if no cursor node.
+
+        Returns:
+            Path to the selected directory.
+        """
+        tree = self.query_one(DirectoryTree)
+        if tree.cursor_node and tree.cursor_node.data:
+            node_path = tree.cursor_node.data.path
+            if node_path.is_dir():
+                return node_path
+            return node_path.parent
+        return Path(self.current_path)
+
+    def action_go_up(self) -> None:
+        """Navigate to the parent directory."""
+        current = Path(self.current_path)
+        parent = current.parent
+        if parent != current:
+            self.navigate_to(parent)
+
+    def navigate_to(self, path: Path) -> None:
+        """Navigate the tree to a new root directory.
+
+        Args:
+            path: Directory to navigate to.
+        """
+        if not path.is_dir():
+            return
+        self.current_path = str(path)
+        tree = self.query_one(DirectoryTree)
+        tree.path = path
+        tree.reload()
+
     def on_directory_tree_directory_selected(
         self, event: DirectoryTree.DirectorySelected
     ) -> None:
         """Handle directory selection."""
         self.current_path = str(event.path)
+
+    def on_directory_tree_file_selected(
+        self, event: DirectoryTree.FileSelected
+    ) -> None:
+        """Open file with system default viewer."""
+        self.open_file(event.path)
+
+    @staticmethod
+    def open_file(path: Path) -> None:
+        """Open a file with the system default application.
+
+        Cross-platform: uses xdg-open (Linux), open (macOS),
+        or start (Windows).
+
+        Args:
+            path: Path to the file to open.
+        """
+        system = platform.system()
+        cmd: list[str] = []
+        if system == "Darwin":
+            cmd = ["open", str(path)]
+        elif system == "Windows":
+            cmd = ["cmd", "/c", "start", "", str(path)]
+        else:
+            cmd = ["xdg-open", str(path)]
+        try:
+            subprocess.Popen(cmd)  # noqa: S603  # nosec B603
+        except FileNotFoundError:
+            pass

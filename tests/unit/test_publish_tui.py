@@ -1,4 +1,9 @@
-"""Tests for bulk publish TUI integration."""
+"""Tests for publish TUI integration (post-F5 refactor).
+
+The old bulk publish menu item has been removed from the F2 menu.
+Publishing is now triggered via F5 (action_copy) which delegates to
+action_copy_from_local on the GeoServerTree widget.
+"""
 
 from pathlib import Path
 
@@ -23,10 +28,10 @@ def connected_config(tmp_path: Path) -> ConfigManager:
 
 class TestPublishTUI:
     @pytest.mark.asyncio
-    async def test_f2_menu_has_bulk_publish(
+    async def test_f2_menu_no_bulk_publish(
         self, connected_config: ConfigManager
     ) -> None:
-        """Test that F2 GeoServer menu includes Bulk Publish."""
+        """Test that F2 GeoServer menu no longer includes Bulk Publish."""
         app = GeoTUIApp(config_manager=connected_config)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause()
@@ -39,77 +44,21 @@ class TestPublishTUI:
             assert isinstance(screen, ContextMenuScreen)
 
     @pytest.mark.asyncio
-    async def test_bulk_publish_action_no_connection(self, tmp_path: Path) -> None:
-        """Test bulk publish warns when no connection."""
+    async def test_copy_from_local_no_connection(self, tmp_path: Path) -> None:
+        """Test copy from local warns when no connection."""
         cm = ConfigManager(config_path=tmp_path / "config.json")
         app = GeoTUIApp(config_manager=cm)
         async with app.run_test() as pilot:
             tree = pilot.app.query_one("#right-pane", GeoServerTree)
-            tree.action_bulk_publish()
+            tree.action_copy_from_local()
             await pilot.pause()
-            panel = tree.query_one("#action-panel")
-            assert panel.display is False
 
     @pytest.mark.asyncio
-    async def test_bulk_publish_shows_form(
-        self, connected_config: ConfigManager
-    ) -> None:
-        """Test bulk publish shows config form when connected."""
-        app = GeoTUIApp(config_manager=connected_config)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            tree = pilot.app.query_one("#right-pane", GeoServerTree)
-            tree.action_bulk_publish()
-            await pilot.pause()
-            panel = tree.query_one("#action-panel")
-            assert panel.display is True
-
-    @pytest.mark.asyncio
-    async def test_bulk_publish_requires_workspace(
-        self, connected_config: ConfigManager
-    ) -> None:
-        """Test that bulk publish requires workspace to be set."""
-        app = GeoTUIApp(config_manager=connected_config)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            tree = pilot.app.query_one("#right-pane", GeoServerTree)
-            tree.action_bulk_publish()
-            await pilot.pause()
-            # Try to submit without filling in workspace
-            tree._do_create()
-            await pilot.pause()
-            # Panel should still be visible (not dismissed)
-            panel = tree.query_one("#action-panel")
-            assert panel.display is True
-
-    @pytest.mark.asyncio
-    async def test_bulk_publish_requires_datastore(
-        self, connected_config: ConfigManager
-    ) -> None:
-        """Test that bulk publish requires datastore to be set."""
-        from textual.widgets import Input
-
-        app = GeoTUIApp(config_manager=connected_config)
-        async with app.run_test(size=(120, 40)) as pilot:
-            await pilot.pause()
-            tree = pilot.app.query_one("#right-pane", GeoServerTree)
-            tree.action_bulk_publish()
-            await pilot.pause()
-            # Fill workspace but leave datastore empty
-            tree.query_one("#field1-input", Input).value = "my_workspace"
-            tree._do_create()
-            await pilot.pause()
-            # Panel should still be visible
-            panel = tree.query_one("#action-panel")
-            assert panel.display is True
-
-    @pytest.mark.asyncio
-    async def test_context_menu_contains_bulk_publish_option(self) -> None:
-        """Test ContextMenuScreen for geoserver pane has gs_bulk_publish option."""
+    async def test_context_menu_no_bulk_publish_option(self) -> None:
+        """Test ContextMenuScreen for geoserver pane has no gs_bulk_publish option."""
         from textual.widgets import OptionList
 
         screen = ContextMenuScreen(pane_type="geoserver")
-        # Instantiate a minimal app to host the screen
         app = GeoTUIApp(config_manager=ConfigManager())
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.app.push_screen(screen)
@@ -118,4 +67,4 @@ class TestPublishTUI:
             option_ids = [
                 opts.get_option_at_index(i).id for i in range(opts.option_count)
             ]
-            assert "gs_bulk_publish" in option_ids
+            assert "gs_bulk_publish" not in option_ids
