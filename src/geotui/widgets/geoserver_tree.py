@@ -422,7 +422,8 @@ class GeoServerTree(Widget):
                 status = self.query_one("#tree-status", Static)
                 status.update(f"Publishing {current}/{total}: {name}")
 
-        assert self.connection is not None
+        if self.connection is None:
+            return
         report = await run_publish(self.connection, config, progress)
 
         if self.is_mounted:
@@ -445,7 +446,8 @@ class GeoServerTree(Widget):
 
     async def _create_workspace(self, name: str) -> None:
         """Create a workspace via the API."""
-        assert self.connection is not None
+        if self.connection is None:
+            return
         async with GeoServerClient(self.connection) as client:
             ok = await client.create_workspace(name)
         if self.is_mounted:
@@ -463,7 +465,8 @@ class GeoServerTree(Widget):
         self, store_type: StoreType, field_values: dict[str, str]
     ) -> None:
         """Create a store via the API using the type registry."""
-        assert self.connection is not None
+        if self.connection is None:
+            return
         ws = self._current_workspace
         name = field_values.get("name", "")
         async with GeoServerClient(self.connection) as client:
