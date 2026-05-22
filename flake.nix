@@ -68,6 +68,15 @@
             echo "              ./scripts/geoserver-down.sh   (stop and destroy)"
             echo "              ./scripts/geoserver-status.sh (check status)"
             export PYTHONPATH="$PWD/src:$PYTHONPATH"
+
+            # Bootstrap a local venv for packages not in nixpkgs
+            if [ ! -d .venv ]; then
+              python3 -m venv .venv --system-site-packages
+            fi
+            source .venv/bin/activate
+            if ! python3 -c "import mkdocstrings_handlers.python" 2>/dev/null; then
+              pip install --quiet mkdocstrings-python griffe 2>/dev/null || true
+            fi
           '';
         };
 

@@ -70,8 +70,13 @@ graph TB
 
 **Acceptance Criteria:**
 - Ctrl+L cycles through English, Portuguese, Spanish
-- GEOTUI_LANG environment variable sets initial language
+- On startup, auto-detects system locale and selects matching language if supported
+- GEOTUI_LANG environment variable overrides system locale detection
 - All UI strings are translatable
+- Footer binding labels update immediately when language changes
+- Status bar text updates when language changes
+- Modal screens (settings, context menu, etc.) use the current language when opened
+- Translations use compiled GNU gettext .mo files for performance
 
 ### US-003: File Navigation
 **As a** user
@@ -146,13 +151,16 @@ graph TB
 
 ### FR-003: Internationalization
 - Three languages: English (default), Portuguese, Spanish
-- Runtime language switching without restart
-- gettext-based translation system
+- Runtime language switching without restart via Ctrl+L
+- Compiled GNU gettext .mo files for translation loading
+- Footer and status bar refresh immediately on language change
+- Binding descriptions stored as specs and rebuilt on language switch
+- GEOTUI_LANG environment variable for initial language selection
 
 ### FR-004: Security
 - **Master Password Vault**: All connection passwords encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256) with PBKDF2-HMAC-SHA256 key derivation (600k iterations)
 - **Startup Unlock**: TUI prompts for master password during startup; CLI prompts before accessing connections (3 attempts max)
-- **Vault Setup**: First-time users prompted to create a master password (min 8 characters, confirmation required)
+- **Mandatory Vault Setup**: First-time users are taken directly to master password creation on first launch (min 8 characters, confirmation required). Users may cancel to proceed without encryption.
 - **Password Change**: Re-encrypts all stored credentials with new key derived from new password
 - **Vault Reset**: Wipes all connections when master password is forgotten (requires explicit confirmation)
 - **File Permissions**: Config file restricted to 0o600, config directory to 0o700

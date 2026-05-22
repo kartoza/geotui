@@ -14,6 +14,71 @@ from geotui.theme import KARTOZA_DARK, KARTOZA_LIGHT
 from geotui.widgets.dual_pane import DualPane
 from geotui.widgets.status_bar import StatusBar
 
+# Binding specs: (key, action, english_msgid, show)
+# Used to rebuild BINDINGS with fresh translations after language change.
+_APP_BINDING_SPECS = [
+    ("tab", "switch_pane", "Switch Pane", False),
+    ("f1", "help", "Help", True),
+    ("f2", "menu", "Menu", True),
+    ("f5", "copy", "Copy", True),
+    ("f6", "move", "Move", True),
+    ("f7", "mkdir", "MkDir", True),
+    ("f8", "delete", "Delete", True),
+    ("f9", "settings", "Settings", True),
+    ("f10", "quit", "Quit", True),
+    ("ctrl+l", "toggle_language", "Language", False),
+]
+
+# Binding specs for screens — same format: (key, action, msgid, show)
+_SETTINGS_BINDING_SPECS = [
+    ("escape", "go_back", "Back", True),
+    ("a", "add", "Add", True),
+    ("e", "edit", "Edit", True),
+    ("d", "delete", "Delete", True),
+    ("t", "test_connection", "Test", True),
+]
+
+_CONTEXT_MENU_BINDING_SPECS = [
+    ("escape", "cancel", "Close", True),
+]
+
+_UNLOCK_BINDING_SPECS = [
+    ("escape", "cancel", "Cancel", True),
+]
+
+_CONFIRM_BINDING_SPECS = [
+    ("escape", "cancel", "Cancel", True),
+]
+
+
+def _rebuild_all_bindings() -> None:
+    """Rebuild BINDINGS on all widget classes with fresh translations.
+
+    Textual caches merged bindings on each class via ``_merged_bindings``.
+    After updating ``BINDINGS``, we must also rebuild that cache so the
+    Footer picks up the new descriptions.
+    """
+    from geotui.i18n import _
+    from geotui.screens.confirm import ConfirmScreen
+    from geotui.screens.context_menu import ContextMenuScreen
+    from geotui.screens.settings import SettingsScreen
+    from geotui.screens.unlock import UnlockScreen
+
+    specs_map = {
+        GeoTUIApp: _APP_BINDING_SPECS,
+        SettingsScreen: _SETTINGS_BINDING_SPECS,
+        ContextMenuScreen: _CONTEXT_MENU_BINDING_SPECS,
+        UnlockScreen: _UNLOCK_BINDING_SPECS,
+        ConfirmScreen: _CONFIRM_BINDING_SPECS,
+    }
+    for cls, specs in specs_map.items():
+        cls.BINDINGS = [  # type: ignore[attr-defined]
+            Binding(key, action, _(desc), show=show)
+            for key, action, desc, show in specs
+        ]
+        # Rebuild Textual's internal bindings cache (frozen Binding objects)
+        cls._merged_bindings = cls._merge_bindings()  # type: ignore[attr-defined]
+
 
 class GeoTUIApp(App[None]):
     """GeoTUI - Midnight Commander-style GeoServer manager."""
@@ -67,16 +132,8 @@ class GeoTUIApp(App[None]):
         return conn
 
     BINDINGS = [
-        Binding("tab", "switch_pane", _("Switch Pane"), show=False),
-        Binding("f1", "help", _("Help")),
-        Binding("f2", "menu", _("Menu")),
-        Binding("f5", "copy", _("Copy")),
-        Binding("f6", "move", _("Move")),
-        Binding("f7", "mkdir", _("MkDir")),
-        Binding("f8", "delete", _("Delete")),
-        Binding("f9", "settings", _("Settings")),
-        Binding("f10", "quit", _("Quit")),
-        Binding("ctrl+l", "toggle_language", _("Language"), show=False),
+        Binding(key, action, _(desc), show=show)
+        for key, action, desc, show in _APP_BINDING_SPECS
     ]
 
     @property
@@ -101,7 +158,7 @@ class GeoTUIApp(App[None]):
         self.push_screen(SplashScreen(), callback=self._after_splash)
 
     def _after_splash(self, _result: None = None) -> None:
-        """After splash dismisses, show unlock if needed."""
+        """After splash dismisses, show unlock or setup as needed."""
         if self.config_manager.load_error:
             self.notify(
                 _("Failed to load config: {error}").format(
@@ -112,16 +169,9 @@ class GeoTUIApp(App[None]):
             )
         if self.config_manager.has_vault:
             self._show_unlock()
-        elif self.config_manager.config.connections:
-            # Existing unencrypted connections - prompt to set up vault
-            self.notify(
-                _(
-                    "Your credentials are not encrypted. "
-                    "Go to Settings (F9) to set up a master password."
-                ),
-                severity="warning",
-                timeout=15,
-            )
+        else:
+            # No vault configured — always prompt for master password setup
+            self._show_vault_setup()
 
     def _show_unlock(self) -> None:
         """Show the unlock screen for existing vault."""
@@ -265,9 +315,31 @@ class GeoTUIApp(App[None]):
         self.push_screen(SettingsScreen(self.config_manager))
 
     def action_toggle_language(self) -> None:
-        """Cycle through available languages."""
-        from geotui.i18n import cycle_language, get_current_language
+        """Cycle through available languages and refresh all UI text."""
+        from geotui.i18n import SUPPORTED_LANGUAGES, _, cycle_language
 
-        cycle_language()
-        lang = get_current_language()
-        self.notify(f"Language: {lang}", title="GeoTUI")
+        new_lang = cycle_language()
+        lang_name = SUPPORTED_LANGUAGES[new_lang]
+
+        # Rebuild class BINDINGS and Textual's internal _merged_bindings cache
+        _rebuild_all_bindings()
+
+        # Copy fresh _merged_bindings into instance _bindings for all live nodes
+        # (Textual copies _merged_bindings into _bindings once during __init__,
+        # so class-level changes don't propagate automatically.)
+        self._bindings = type(self)._merged_bindings.copy()  # type: ignore[union-attr]
+
+        # Signal footer to re-render with updated descriptions
+        self.refresh_bindings()
+
+        # Update status bar text
+        try:
+            from textual.widgets import Static
+
+            status_bar = self.query_one(StatusBar)
+            left = status_bar.query_one(".status-left", Static)
+            left.update(_("Ready"))
+        except Exception:  # nosec B110
+            pass  # StatusBar may not be mounted
+
+        self.notify(f"Language: {lang_name}", title="GeoTUI")
