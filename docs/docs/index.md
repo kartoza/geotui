@@ -73,18 +73,31 @@ For a detailed walkthrough with screenshots, see the [Getting Started](user-guid
 | **F10 / q** | Quit |
 | **Ctrl+L** | Cycle language (EN / PT / ES) |
 
-## Documentation
+## Start Here
+
+New to GeoTUI? Follow these guides in order:
+
+| Step | Guide | What you'll learn |
+|------|-------|-------------------|
+| 1 | **[Getting Started](user-guide/getting-started.md)** | Install, set up your master password, add a GeoServer connection |
+| 2 | **[Navigation](user-guide/navigation.md)** | Dual-pane layout, keyboard shortcuts, switching panes |
+| 3 | **[Configuration](user-guide/configuration.md)** | Credential vault, language switching, colour palette |
+| 4 | **[Connecting to GSH](user-guide/connecting-gsh.md)** | Set up a hosted GeoServer on GeoSpatialHosting |
+
+## All Documentation
 
 <div class="grid cards" markdown>
 
-- **[Getting Started](user-guide/getting-started.md)** — install, connect, and publish your first data
-- **[Navigation](user-guide/navigation.md)** — keyboard shortcuts and publishing workflow
-- **[Connecting to GSH](user-guide/connecting-gsh.md)** — set up a hosted GeoServer on GeoSpatialHosting
-- **[Configuration](user-guide/configuration.md)** — vault, language, and colour settings
-- **[Installation](admin-guide/installation.md)** — all platforms and package formats
-- **[Security](admin-guide/security.md)** — encryption, threat model, vulnerability reporting
-- **[Architecture](developer-guide/architecture.md)** — module structure and design decisions
-- **[Contributing](developer-guide/contributing.md)** — development setup and how to help
+- :material-rocket-launch: **[Getting Started](user-guide/getting-started.md)** — install, connect, and publish your first data
+- :material-keyboard: **[Navigation](user-guide/navigation.md)** — keyboard shortcuts and publishing workflow
+- :material-cloud: **[Connecting to GSH](user-guide/connecting-gsh.md)** — hosted GeoServer on GeoSpatialHosting
+- :material-cog: **[Configuration](user-guide/configuration.md)** — vault, language, and colour settings
+- :material-download: **[Installation](admin-guide/installation.md)** — all platforms and package formats
+- :material-shield-lock: **[Security](admin-guide/security.md)** — encryption, threat model, vulnerability reporting
+- :material-file-tree: **[Architecture](developer-guide/architecture.md)** — module structure and design decisions
+- :material-code-tags: **[API Reference](developer-guide/api.md)** — full Python API documentation
+- :material-hand-heart: **[Contributing](developer-guide/contributing.md)** — development setup and how to help
+- :material-bug: **[Security & Supply Chain](developer-guide/security-supply-chain.md)** — SBOM, CVE scanning, auditing
 
 </div>
 

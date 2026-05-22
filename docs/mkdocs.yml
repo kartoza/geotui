@@ -53,9 +53,23 @@ nav:
       - Architecture: developer-guide/architecture.md
       - Testing: developer-guide/testing.md
       - Internationalization: developer-guide/i18n.md
+      - Security & Supply Chain: developer-guide/security-supply-chain.md
+      - API Reference: developer-guide/api.md
 
 plugins:
   - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [../src]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            merge_init_into_class: true
+            show_if_no_docstring: false
 
 extra:
   social:
@@ -76,3 +90,6 @@ markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg

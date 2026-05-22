@@ -124,13 +124,21 @@ For a detailed walkthrough with screenshots, see the [Getting Started guide](htt
 
 ## Documentation
 
-Full documentation: [kartoza.github.io/geotui](https://kartoza.github.io/geotui)
+**Full documentation: [:book: kartoza.github.io/geotui](https://kartoza.github.io/geotui)**
 
-- [Getting Started](https://kartoza.github.io/geotui/user-guide/getting-started/) — install, connect, publish
-- [Navigation](https://kartoza.github.io/geotui/user-guide/navigation/) — keyboard shortcuts and workflows
+**For users:**
+
+- [Getting Started](https://kartoza.github.io/geotui/user-guide/getting-started/) — install, connect, publish your first data
+- [Navigation](https://kartoza.github.io/geotui/user-guide/navigation/) — keyboard shortcuts and publishing workflow
 - [Configuration](https://kartoza.github.io/geotui/user-guide/configuration/) — vault, language, colours
-- [Architecture](https://kartoza.github.io/geotui/developer-guide/architecture/) — module structure and design
-- [Contributing](https://kartoza.github.io/geotui/developer-guide/contributing/) — development setup
+- [Connecting to GeoSpatialHosting](https://kartoza.github.io/geotui/user-guide/connecting-gsh/) — hosted GeoServer setup
+
+**For developers:**
+
+- [Architecture](https://kartoza.github.io/geotui/developer-guide/architecture/) — module structure and design decisions
+- [API Reference](https://kartoza.github.io/geotui/developer-guide/api/) — full Python API documentation
+- [Contributing](https://kartoza.github.io/geotui/developer-guide/contributing/) — development setup, coding standards, CI/CD
+- [Security & Supply Chain](https://kartoza.github.io/geotui/developer-guide/security-supply-chain/) — SBOM, CVE scanning, dependency auditing
 
 ## Development
 
