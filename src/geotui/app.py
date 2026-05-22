@@ -72,12 +72,12 @@ def _rebuild_all_bindings() -> None:
         ConfirmScreen: _CONFIRM_BINDING_SPECS,
     }
     for cls, specs in specs_map.items():
-        cls.BINDINGS = [
+        cls.BINDINGS = [  # type: ignore[attr-defined]
             Binding(key, action, _(desc), show=show)
             for key, action, desc, show in specs
         ]
         # Rebuild Textual's internal bindings cache (frozen Binding objects)
-        cls._merged_bindings = cls._merge_bindings()
+        cls._merged_bindings = cls._merge_bindings()  # type: ignore[attr-defined]
 
 
 class GeoTUIApp(App[None]):
@@ -327,7 +327,7 @@ class GeoTUIApp(App[None]):
         # Copy fresh _merged_bindings into instance _bindings for all live nodes
         # (Textual copies _merged_bindings into _bindings once during __init__,
         # so class-level changes don't propagate automatically.)
-        self._bindings = type(self)._merged_bindings.copy()
+        self._bindings = type(self)._merged_bindings.copy()  # type: ignore[union-attr]
 
         # Signal footer to re-render with updated descriptions
         self.refresh_bindings()
@@ -339,7 +339,7 @@ class GeoTUIApp(App[None]):
             status_bar = self.query_one(StatusBar)
             left = status_bar.query_one(".status-left", Static)
             left.update(_("Ready"))
-        except Exception:
-            pass
+        except Exception:  # nosec B110
+            pass  # StatusBar may not be mounted
 
         self.notify(f"Language: {lang_name}", title="GeoTUI")
