@@ -90,9 +90,7 @@ class TestUnlockScreen:
         results: list[str | None] = []
 
         async with GeoTUIApp().run_test() as pilot:
-            pilot.app.push_screen(
-                UnlockScreen(is_setup=False), callback=results.append
-            )
+            pilot.app.push_screen(UnlockScreen(is_setup=False), callback=results.append)
             await pilot.pause()
             from textual.widgets import Input
 

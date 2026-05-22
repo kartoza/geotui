@@ -35,9 +35,7 @@ class TestConfirmScreen:
         results: list[bool] = []
 
         async with GeoTUIApp().run_test() as pilot:
-            pilot.app.push_screen(
-                ConfirmScreen("Test", "msg"), callback=results.append
-            )
+            pilot.app.push_screen(ConfirmScreen("Test", "msg"), callback=results.append)
             await pilot.pause()
             await pilot.press("escape")
             await pilot.pause()
@@ -61,9 +59,7 @@ class TestConfirmScreen:
     async def test_confirm_name_enables_button(self) -> None:
         """Test that typing the correct name enables the delete button."""
         async with GeoTUIApp().run_test() as pilot:
-            pilot.app.push_screen(
-                ConfirmScreen("Delete", "Sure?", require_name="ws1")
-            )
+            pilot.app.push_screen(ConfirmScreen("Delete", "Sure?", require_name="ws1"))
             await pilot.pause()
             from textual.widgets import Button, Input
 
@@ -77,9 +73,7 @@ class TestConfirmScreen:
     async def test_confirm_wrong_name_keeps_disabled(self) -> None:
         """Test that wrong name keeps button disabled."""
         async with GeoTUIApp().run_test() as pilot:
-            pilot.app.push_screen(
-                ConfirmScreen("Delete", "Sure?", require_name="ws1")
-            )
+            pilot.app.push_screen(ConfirmScreen("Delete", "Sure?", require_name="ws1"))
             await pilot.pause()
             from textual.widgets import Button, Input
 
