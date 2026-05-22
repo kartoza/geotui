@@ -595,7 +595,10 @@ class GeoServerTree(Widget):
                 if current.data.node_type == "connection":
                     conn_id = current.data.connection_id
                     break
-            current = current.parent
+            parent = current.parent
+            if parent is None:
+                break
+            current = parent
 
         if conn_id is None:
             return None
