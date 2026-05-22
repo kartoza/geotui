@@ -2,20 +2,129 @@
 
 import platform
 import subprocess  # nosec B404
+from collections.abc import Iterable
 from pathlib import Path
 
+from rich.style import Style
+from rich.text import Text
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Vertical
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DirectoryTree, Label, Static
+from textual.widgets._directory_tree import DirEntry
+from textual.widgets._tree import TreeNode
+
+from geotui.i18n import _
+
+# Shapefile companion extensions (import from publisher to stay DRY)
+SHAPEFILE_ALL_EXTS: frozenset[str] = frozenset(
+    {".shp", ".shx", ".dbf", ".prj", ".cpg", ".qix", ".sbn", ".sbx", ".fix", ".qpj"}
+)
+
+
+def find_shapefile_companions(path: Path) -> list[Path]:
+    """Find all companion files for a shapefile component.
+
+    Given any shapefile component (e.g. roads.shp, roads.dbf),
+    returns all sibling files with the same stem and a shapefile extension.
+
+    Args:
+        path: Path to any shapefile component file.
+
+    Returns:
+        Sorted list of all companion paths (including the input file).
+    """
+    stem = path.stem
+    parent = path.parent
+    companions = []
+    for ext in sorted(SHAPEFILE_ALL_EXTS):
+        candidate = parent / f"{stem}{ext}"
+        if candidate.exists():
+            companions.append(candidate)
+    return companions
+
+
+def is_shapefile_component(path: Path) -> bool:
+    """Check if a path is a shapefile component file."""
+    return path.suffix.lower() in SHAPEFILE_ALL_EXTS
+
+
+class MCDirectoryTree(DirectoryTree):
+    """DirectoryTree with '..' parent directory entry like Midnight Commander."""
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+        disabled: bool = False,
+    ) -> None:
+        super().__init__(path, name=name, id=id, classes=classes, disabled=disabled)
+        self._selected_paths: set[Path] = set()
+
+    def _populate_node(self, node: TreeNode[DirEntry], content: Iterable[Path]) -> None:
+        """Populate node with '..' as the first entry."""
+        node.remove_children()
+        # Add ".." entry for parent navigation (only for root node)
+        if node == self.root:
+            tree_path = Path(self.path) if isinstance(self.path, str) else self.path
+            parent = tree_path.parent
+            if parent != tree_path:
+                node.add("..", data=DirEntry(parent), allow_expand=False)
+        for path in content:
+            node.add(
+                path.name,
+                data=DirEntry(path),
+                allow_expand=self._safe_is_dir(path),
+            )
+        node.expand()
+
+    def render_label(
+        self, node: TreeNode[DirEntry], base_style: Style, style: Style
+    ) -> Text:
+        """Render label with selection marker for tagged files."""
+        label = super().render_label(node, base_style, style)
+        if node.data and node.data.path in self._selected_paths:
+            # Prepend a selection marker like MC
+            marker = Text("* ", style=Style(color="yellow", bold=True))
+            label = Text.assemble(marker, label)
+        return label
+
+    def toggle_select_cursor(self) -> None:
+        """Toggle selection on the node under the cursor."""
+        if not self.cursor_node or not self.cursor_node.data:
+            return
+        path = self.cursor_node.data.path
+        # Don't allow selecting ".." or directories
+        tree_path = Path(self.path) if isinstance(self.path, str) else self.path
+        if path == tree_path.parent or path.is_dir():
+            return
+        if path in self._selected_paths:
+            self._selected_paths.discard(path)
+        else:
+            self._selected_paths.add(path)
+        self.refresh()
+
+    def clear_selection(self) -> None:
+        """Clear all selected files."""
+        self._selected_paths.clear()
+        self.refresh()
+
+    @property
+    def selected_paths(self) -> set[Path]:
+        """Return the set of selected file paths."""
+        return set(self._selected_paths)
 
 
 class FilePane(Widget):
     """A single file browser pane with directory tree and details."""
 
     BINDINGS = [
-        ("backspace", "go_up", "Parent Dir"),
+        Binding("ctrl+t", "toggle_select", _("Select"), show=False),
     ]
 
     DEFAULT_CSS = """
@@ -44,7 +153,7 @@ class FilePane(Widget):
         color: $background;
     }
 
-    FilePane DirectoryTree {
+    FilePane MCDirectoryTree {
         height: 1fr;
         width: 100%;
     }
@@ -79,7 +188,7 @@ class FilePane(Widget):
         """Compose the file pane layout."""
         with Vertical():
             yield Label(self._pane_title, classes="pane-header")
-            yield DirectoryTree(self.current_path)
+            yield MCDirectoryTree(self.current_path)
             yield Static(self.current_path, classes="pane-footer")
 
     def watch_is_active(self, value: bool) -> None:
@@ -93,6 +202,17 @@ class FilePane(Widget):
         if self.is_mounted:
             footer = self.query_one(".pane-footer", Static)
             footer.update(value)
+            self._update_footer()
+
+    def _update_footer(self) -> None:
+        """Update footer with path and selection count."""
+        tree = self.query_one(MCDirectoryTree)
+        count = len(tree.selected_paths)
+        text = self.current_path
+        if count:
+            text = f"{text}  [{count} selected]"
+        footer = self.query_one(".pane-footer", Static)
+        footer.update(text)
 
     def get_selected_path(self) -> Path:
         """Get the path of the highlighted item in the tree.
@@ -104,7 +224,7 @@ class FilePane(Widget):
         Returns:
             Path to the selected directory.
         """
-        tree = self.query_one(DirectoryTree)
+        tree = self.query_one(MCDirectoryTree)
         if tree.cursor_node and tree.cursor_node.data:
             node_path = tree.cursor_node.data.path
             if node_path.is_dir():
@@ -112,12 +232,37 @@ class FilePane(Widget):
             return node_path.parent
         return Path(self.current_path)
 
-    def action_go_up(self) -> None:
-        """Navigate to the parent directory."""
-        current = Path(self.current_path)
-        parent = current.parent
-        if parent != current:
-            self.navigate_to(parent)
+    def get_selected_files(self) -> list[Path]:
+        """Get files selected via Ctrl+T, with smart shapefile companion detection.
+
+        If files are selected via Ctrl+T, returns those files plus any
+        shapefile companions. If no files are tagged, returns an empty list
+        (caller should fall back to directory-level discovery).
+
+        Returns:
+            List of selected file paths with companions included.
+        """
+        tree = self.query_one(MCDirectoryTree)
+        selected = tree.selected_paths
+        if not selected:
+            return []
+
+        # Expand shapefile companions
+        result: set[Path] = set()
+        for path in selected:
+            if is_shapefile_component(path):
+                result.update(find_shapefile_companions(path))
+            else:
+                result.add(path)
+        return sorted(result)
+
+    def action_toggle_select(self) -> None:
+        """Toggle selection on the file under cursor, then move down."""
+        tree = self.query_one(MCDirectoryTree)
+        tree.toggle_select_cursor()
+        # Move cursor down like MC does after tagging
+        tree.action_cursor_down()
+        self._update_footer()
 
     def navigate_to(self, path: Path) -> None:
         """Navigate the tree to a new root directory.
@@ -128,15 +273,17 @@ class FilePane(Widget):
         if not path.is_dir():
             return
         self.current_path = str(path)
-        tree = self.query_one(DirectoryTree)
+        tree = self.query_one(MCDirectoryTree)
+        tree.clear_selection()
         tree.path = path
         tree.reload()
 
     def on_directory_tree_directory_selected(
         self, event: DirectoryTree.DirectorySelected
     ) -> None:
-        """Handle directory selection."""
-        self.current_path = str(event.path)
+        """Handle directory selection - navigate into selected directory."""
+        event.stop()
+        self.navigate_to(event.path)
 
     def on_directory_tree_file_selected(
         self, event: DirectoryTree.FileSelected

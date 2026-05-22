@@ -1,17 +1,16 @@
 """GeoServer resource tree widget.
 
 Displays the GeoServer resource hierarchy (workspaces > stores > layers)
-in a tree view, populated from the active connection. Provides actions
+in a tree view, populated from all configured connections. Provides actions
 for creating workspaces and stores via the F2 context menu.
 """
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from geotui.publisher import SpatialFileGroup
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -34,9 +33,14 @@ from geotui.client import (
     GeoServerResource,
     StoreType,
 )
-from geotui.config import Connection
+from geotui.config import ConfigManager, Connection
 from geotui.i18n import _
 from geotui.theme import KARTOZA_COLORS
+
+if TYPE_CHECKING:
+    from geotui.publisher import SpatialFileGroup
+
+logger = logging.getLogger("geotui.tree")
 
 # Colors for resource types
 _COLORS = {
@@ -59,8 +63,34 @@ _CATEGORY_COLORS = {
     "remote": KARTOZA_COLORS["highlight2"],
 }
 
+# Connection state colors
+_STATE_COLORS = {
+    "untested": "#8A8B8B",
+    "connected": "#06969A",
+    "failed": "#CC0403",
+}
+
 # Maximum number of dynamic form fields
 _MAX_FIELDS = 6
+
+
+@dataclass
+class TreeNodeData:
+    """Data attached to each tree node for identification.
+
+    Attributes:
+        node_type: One of 'root', 'connection', 'workspace',
+            'datastore', 'coveragestore', 'wmsstore', 'layer',
+            'coverage', 'error'.
+        name: Display name of the node.
+        connection_id: ID of the Connection this node belongs to.
+        resource: Optional GeoServerResource for resource nodes.
+    """
+
+    node_type: str
+    name: str
+    connection_id: str
+    resource: GeoServerResource | None = None
 
 
 class GeoServerTree(Widget):
@@ -188,16 +218,46 @@ class GeoServerTree(Widget):
     }
     """
 
-    connection: reactive[Connection | None] = reactive(None)
     is_active: reactive[bool] = reactive(False)
-    loading: reactive[bool] = reactive(False)
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the tree widget."""
+    def __init__(self, config_manager: ConfigManager, **kwargs: Any) -> None:
+        """Initialize the tree widget.
+
+        Args:
+            config_manager: The application config manager containing connections.
+        """
         super().__init__(**kwargs)
+        self._config_manager = config_manager
+        self._connections: dict[str, Connection] = {}  # keyed by connection ID
+        self._connection_states: dict[str, str] = {}  # "untested"/"connected"/"failed"
+        self._connection_errors: dict[str, str] = {}  # error messages
         self._current_action = ""
         self._current_workspace = ""
         self._selected_store_type: StoreType | None = None
+
+    def _decrypt_conn(self, conn: Connection) -> Connection:
+        """Decrypt a connection's password via the app vault key.
+
+        Args:
+            conn: Connection with potentially encrypted password.
+
+        Returns:
+            Connection with plaintext password.
+        """
+        from geotui.app import GeoTUIApp
+
+        app = self.app
+        if isinstance(app, GeoTUIApp):
+            if app.config_manager.has_vault and not app.vault_key:
+                logger.warning(
+                    "Vault locked - cannot decrypt connection '%s'", conn.name
+                )
+                self.app.notify(
+                    _("Vault is locked. Press F9 to unlock."),
+                    severity="error",
+                )
+            return app.decrypt_connection(conn)
+        return conn
 
     def compose(self) -> ComposeResult:
         """Compose the tree widget."""
@@ -225,12 +285,365 @@ class GeoServerTree(Widget):
                     )
 
     def on_mount(self) -> None:
-        """Set initial state."""
+        """Set initial state and load connections."""
         tree = self.query_one("#gs-tree", Tree)
-        tree.display = False
         tree.show_root = False
         self._hide_action_panel()
         self.query_one("#publish-progress").display = False
+        self.refresh_connections()
+
+    # ── Multi-connection management ───────────────────────
+
+    def refresh_connections(self) -> None:
+        """Rebuild the tree from the config manager's connections."""
+        connections = self._config_manager.config.connections
+
+        # Update internal connection dicts
+        new_ids = {c.id for c in connections}
+        # Remove stale entries
+        for old_id in list(self._connections.keys()):
+            if old_id not in new_ids:
+                self._connections.pop(old_id, None)
+                self._connection_states.pop(old_id, None)
+                self._connection_errors.pop(old_id, None)
+
+        # Add/update connections
+        for conn in connections:
+            self._connections[conn.id] = conn
+            if conn.id not in self._connection_states:
+                self._connection_states[conn.id] = "untested"
+
+        tree = self.query_one("#gs-tree", Tree)
+        no_conn = self.query_one("#no-connection", Static)
+
+        if not connections:
+            tree.display = False
+            no_conn.display = True
+            self.query_one("#tree-title", Label).update(_("GeoServer"))
+            self.query_one("#tree-title", Label).set_class(False, "connected")
+            return
+
+        no_conn.display = False
+        tree.display = True
+        tree.clear()
+
+        for conn in connections:
+            state = self._connection_states.get(conn.id, "untested")
+            color = _STATE_COLORS[state]
+            node = tree.root.add(
+                f"[bold {color}]{conn.name}[/]",
+                data=TreeNodeData(
+                    node_type="connection",
+                    name=conn.name,
+                    connection_id=conn.id,
+                ),
+                expand=False,
+            )
+            # If already connected, we keep the children (they'll be re-fetched
+            # on expand). If failed, show error child.
+            if state == "failed":
+                err = self._connection_errors.get(conn.id, "Connection failed")
+                node.add_leaf(
+                    f"[#CC0403]{err}[/]",
+                    data=TreeNodeData(
+                        node_type="error",
+                        name=err,
+                        connection_id=conn.id,
+                    ),
+                )
+
+        # Update header
+        count = len(connections)
+        connected = sum(1 for s in self._connection_states.values() if s == "connected")
+        title = self.query_one("#tree-title", Label)
+        if connected > 0:
+            title.update(f"GeoServer ({connected}/{count})")
+            title.set_class(True, "connected")
+        else:
+            title.update(f"GeoServer ({count})")
+            title.set_class(False, "connected")
+
+    def on_tree_node_expanded(self, event: Tree.NodeExpanded[Any]) -> None:
+        """Handle tree node expansion - lazy-load connection trees."""
+        node = event.node
+        if not node.data or not isinstance(node.data, TreeNodeData):
+            return
+        if node.data.node_type != "connection":
+            return
+
+        conn_id = node.data.connection_id
+        state = self._connection_states.get(conn_id, "untested")
+
+        if state in ("untested", "failed"):
+            # Clear any existing error children
+            node.remove_children()
+            node.add_leaf(
+                "[#8A8B8B]Loading...[/]",
+                data=TreeNodeData(
+                    node_type="error",
+                    name="Loading...",
+                    connection_id=conn_id,
+                ),
+            )
+            self.run_worker(
+                self._fetch_connection_tree(conn_id),
+                exclusive=False,
+                exit_on_error=False,
+            )
+
+    async def _fetch_connection_tree(self, conn_id: str) -> None:
+        """Fetch and populate the tree for a specific connection.
+
+        Args:
+            conn_id: The connection ID to fetch the tree for.
+        """
+        from geotui.client import test_connection
+
+        conn = self._connections.get(conn_id)
+        if conn is None:
+            return
+
+        # Test the connection first (decrypt for API use)
+        result = await test_connection(self._decrypt_conn(conn))
+
+        if not self.is_mounted:
+            return
+
+        # Find the connection node
+        conn_node = self._find_connection_node(conn_id)
+        if conn_node is None:
+            return
+
+        if not result.success:
+            self._connection_states[conn_id] = "failed"
+            self._connection_errors[conn_id] = result.message
+            conn_node.remove_children()
+            conn_node.set_label(f"[bold {_STATE_COLORS['failed']}]{conn.name}[/]")
+            conn_node.add_leaf(
+                f"[#CC0403]{result.message}[/]",
+                data=TreeNodeData(
+                    node_type="error",
+                    name=result.message,
+                    connection_id=conn_id,
+                ),
+            )
+            self._update_header()
+            return
+
+        # Connection succeeded - fetch full tree
+        self._connection_states[conn_id] = "connected"
+        self._connection_errors.pop(conn_id, None)
+        conn_node.set_label(f"[bold {_STATE_COLORS['connected']}]{conn.name}[/]")
+
+        try:
+            async with GeoServerClient(self._decrypt_conn(conn)) as client:
+                resources = await client.get_full_tree()
+
+            if not self.is_mounted:
+                return
+
+            conn_node.remove_children()
+
+            if not resources:
+                conn_node.add_leaf(
+                    "[#8A8B8B]No workspaces found[/]",
+                    data=TreeNodeData(
+                        node_type="error",
+                        name="No workspaces found",
+                        connection_id=conn_id,
+                    ),
+                )
+            else:
+                self._populate_connection_tree(conn_node, conn_id, resources)
+
+            # Update status
+            if resources:
+                count = sum(
+                    1 + len(ws.children) + sum(len(s.children) for s in ws.children)
+                    for ws in resources
+                )
+                ws_count = len(resources)
+                status = self.query_one("#tree-status", Static)
+                status.update(f"{conn.name}: {ws_count} workspace(s), {count} total")
+
+        except Exception as exc:
+            if self.is_mounted:
+                self._connection_states[conn_id] = "failed"
+                err_msg = str(exc) or "Connection failed"
+                self._connection_errors[conn_id] = err_msg
+                conn_node.set_label(f"[bold {_STATE_COLORS['failed']}]{conn.name}[/]")
+                conn_node.remove_children()
+                conn_node.add_leaf(
+                    f"[#CC0403]{err_msg}[/]",
+                    data=TreeNodeData(
+                        node_type="error",
+                        name=err_msg,
+                        connection_id=conn_id,
+                    ),
+                )
+
+        self._update_header()
+
+    def _find_connection_node(self, conn_id: str) -> Any:
+        """Find the tree node for a given connection ID.
+
+        Args:
+            conn_id: Connection ID to find.
+
+        Returns:
+            The tree node or None.
+        """
+        tree = self.query_one("#gs-tree", Tree)
+        for child in tree.root.children:
+            if (
+                child.data
+                and isinstance(child.data, TreeNodeData)
+                and child.data.node_type == "connection"
+                and child.data.connection_id == conn_id
+            ):
+                return child
+        return None
+
+    def _populate_connection_tree(
+        self,
+        conn_node: Any,
+        conn_id: str,
+        resources: list[GeoServerResource],
+    ) -> None:
+        """Populate workspace/store/layer children under a connection node.
+
+        Args:
+            conn_node: The connection tree node.
+            conn_id: The connection ID.
+            resources: List of GeoServerResource workspace objects.
+        """
+        for ws in resources:
+            ws_node = conn_node.add(
+                f"[bold {_COLORS['workspace']}]{ws.name}[/]",
+                data=TreeNodeData(
+                    node_type="workspace",
+                    name=ws.name,
+                    connection_id=conn_id,
+                    resource=ws,
+                ),
+                expand=False,
+            )
+            for store in ws.children:
+                color = _COLORS.get(store.resource_type, _COLORS["default"])
+                label = _LABELS.get(store.resource_type, store.resource_type)
+                store_node = ws_node.add(
+                    f"[{color}]{store.name}[/] [{label}]",
+                    data=TreeNodeData(
+                        node_type=store.resource_type,
+                        name=store.name,
+                        connection_id=conn_id,
+                        resource=store,
+                    ),
+                    expand=False,
+                )
+                for layer in store.children:
+                    store_node.add_leaf(
+                        f"[{_COLORS['default']}]{layer.name}[/]",
+                        data=TreeNodeData(
+                            node_type=layer.resource_type,
+                            name=layer.name,
+                            connection_id=conn_id,
+                            resource=layer,
+                        ),
+                    )
+
+        conn_node.expand_all()
+
+    def _update_header(self) -> None:
+        """Update the tree header based on connection states."""
+        count = len(self._connections)
+        connected = sum(1 for s in self._connection_states.values() if s == "connected")
+        title = self.query_one("#tree-title", Label)
+        if connected > 0:
+            title.update(f"GeoServer ({connected}/{count})")
+            title.set_class(True, "connected")
+        else:
+            title.update(f"GeoServer ({count})")
+            title.set_class(False, "connected")
+
+    # ── Navigation helpers ────────────────────────────────
+
+    def _get_selected_connection(self) -> tuple[Connection, str | None] | None:
+        """Get the connection and optional workspace from the cursor node.
+
+        Walks from the cursor node up through parents to find the connection
+        node and optionally the workspace node.
+
+        Returns:
+            Tuple of (Connection, workspace_name_or_None) or None if no
+            connection node is found.
+        """
+        tree = self.query_one("#gs-tree", Tree)
+        if not tree.cursor_node or not tree.cursor_node.data:
+            return None
+
+        node = tree.cursor_node
+        workspace_name: str | None = None
+        conn_id: str | None = None
+
+        # Walk up from cursor to find connection and workspace nodes
+        current = node
+        while current is not None:
+            if isinstance(current.data, TreeNodeData):
+                if current.data.node_type == "workspace" and workspace_name is None:
+                    workspace_name = current.data.name
+                if current.data.node_type == "connection":
+                    conn_id = current.data.connection_id
+                    break
+            parent = current.parent
+            if parent is None:
+                break
+            current = parent
+
+        if conn_id is None:
+            return None
+
+        conn = self._connections.get(conn_id)
+        if conn is None:
+            return None
+
+        return (conn, workspace_name)
+
+    def _get_selected_workspace(self) -> str | None:
+        """Get the workspace name from the selected tree node."""
+        result = self._get_selected_connection()
+        if result is None:
+            return None
+        return result[1]
+
+    def _refresh_connection(self, conn_id: str) -> None:
+        """Clear and re-fetch the tree for a specific connection.
+
+        Args:
+            conn_id: The connection ID to refresh.
+        """
+        self._connection_states[conn_id] = "untested"
+        self._connection_errors.pop(conn_id, None)
+
+        conn_node = self._find_connection_node(conn_id)
+        if conn_node is not None:
+            conn = self._connections.get(conn_id)
+            if conn:
+                conn_node.remove_children()
+                conn_node.set_label(f"[bold {_STATE_COLORS['untested']}]{conn.name}[/]")
+                conn_node.add_leaf(
+                    "[#8A8B8B]Loading...[/]",
+                    data=TreeNodeData(
+                        node_type="error",
+                        name="Loading...",
+                        connection_id=conn_id,
+                    ),
+                )
+                self.run_worker(
+                    self._fetch_connection_tree(conn_id),
+                    exclusive=False,
+                    exit_on_error=False,
+                )
 
     # ── Action panel management ────────────────────────────
 
@@ -279,30 +692,12 @@ class GeoServerTree(Widget):
             values[field_name] = inp.value.strip()
         return values
 
-    def _get_selected_workspace(self) -> str | None:
-        """Get the workspace name from the selected tree node."""
-        tree = self.query_one("#gs-tree", Tree)
-        if tree.cursor_node and tree.cursor_node.data:
-            node = tree.cursor_node
-            data = node.data
-            if isinstance(data, GeoServerResource):
-                if data.resource_type == "workspace":
-                    return data.name
-                parent = node.parent
-                while parent and parent.data:
-                    if (
-                        isinstance(parent.data, GeoServerResource)
-                        and parent.data.resource_type == "workspace"
-                    ):
-                        return parent.data.name
-                    parent = parent.parent
-        return None
-
     # ── Actions (called from F2 menu) ──────────────────────
 
     def action_create_workspace(self) -> None:
         """Show the create workspace form."""
-        if not self.connection:
+        result = self._get_selected_connection()
+        if not result:
             self.app.notify(_("No connection active"), severity="warning")
             return
         self._current_action = "workspace"
@@ -313,11 +708,12 @@ class GeoServerTree(Widget):
 
     def action_create_store(self) -> None:
         """Show the store type selector."""
-        if not self.connection:
+        result = self._get_selected_connection()
+        if not result:
             self.app.notify(_("No connection active"), severity="warning")
             return
 
-        ws = self._get_selected_workspace()
+        ws = result[1]
         if not ws:
             self.app.notify(
                 _("Select a workspace in the tree first"),
@@ -365,28 +761,28 @@ class GeoServerTree(Widget):
 
     def action_copy_from_local(self) -> None:
         """Copy spatial files from the local pane to GeoServer (F5 handler)."""
-        from geotui.publisher import discover_spatial_files
+        from geotui.publisher import (
+            discover_spatial_files,
+            discover_spatial_files_from_paths,
+        )
         from geotui.widgets.file_pane import FilePane
 
-        if not self.connection:
+        result = self._get_selected_connection()
+        if not result:
             self.app.notify(_("No connection active"), severity="warning")
             return
 
-        # Get source path from left pane.
+        conn, _ws = result
+
+        # Get source from left pane.
         try:
             file_pane = self.app.query_one("#left-pane", FilePane)
+            selected_files = file_pane.get_selected_files()
             source_dir = file_pane.get_selected_path()
         except Exception:
             self.app.notify(
                 _("Cannot read the local file pane"),
                 severity="error",
-            )
-            return
-
-        if not source_dir.is_dir():
-            self.app.notify(
-                _("Selected path is not a directory"),
-                severity="warning",
             )
             return
 
@@ -399,11 +795,21 @@ class GeoServerTree(Widget):
             )
             return
 
-        # Discover spatial files.
-        groups, warnings = discover_spatial_files(source_dir)
+        # Use Ctrl+T selected files if any, otherwise scan directory.
+        if selected_files:
+            groups, warnings = discover_spatial_files_from_paths(selected_files)
+        else:
+            if not source_dir.is_dir():
+                self.app.notify(
+                    _("Selected path is not a directory"),
+                    severity="warning",
+                )
+                return
+            groups, warnings = discover_spatial_files(source_dir)
+
         if not groups:
             self.app.notify(
-                _("No spatial files found in ") + str(source_dir),
+                _("No spatial files found"),
                 severity="warning",
             )
             return
@@ -411,8 +817,13 @@ class GeoServerTree(Widget):
         # Summarise what was found.
         total_files = sum(len(g.files) for g in groups)
         formats = ", ".join(g.format_type for g in groups)
+        source_label = (
+            f"{len(selected_files)} selected file(s)"
+            if selected_files
+            else source_dir.name
+        )
         self.app.notify(
-            f"Found {total_files} file(s) [{formats}] in {source_dir.name}",
+            f"Found {total_files} file(s) [{formats}] from {source_label}",
             severity="information",
         )
 
@@ -422,23 +833,29 @@ class GeoServerTree(Widget):
 
         # Run the publish in a background worker.
         self.run_worker(
-            self._run_copy_publish(source_dir, workspace, groups, warnings),
+            self._run_copy_publish(conn, source_dir, workspace, groups, warnings),
             exit_on_error=False,
         )
 
     async def _run_copy_publish(
         self,
+        conn: Connection,
         source_dir: Path,
         workspace: str,
         groups: list[SpatialFileGroup],
         warnings: list[str],
     ) -> None:
-        """Run copy-to-publish in background for all discovered spatial groups."""
+        """Run copy-to-publish in background for all discovered spatial groups.
+
+        Args:
+            conn: The GeoServer connection to publish to.
+            source_dir: Source directory path.
+            workspace: Target workspace name.
+            groups: Discovered spatial file groups.
+            warnings: Discovery warnings.
+        """
         from geotui.publisher import NamingStrategy, PublishConfig, run_publish
         from geotui.report import generate_json_report, generate_pdf_report
-
-        if self.connection is None:
-            return
 
         total_groups = len(groups)
         progress_panel = self.query_one("#publish-progress")
@@ -471,14 +888,15 @@ class GeoServerTree(Widget):
                         f"[{_gi}/{total_groups}] Publishing {current}/{total}: {name}"
                     )
 
-            report = await run_publish(self.connection, config, progress)
+            report = await run_publish(self._decrypt_conn(conn), config, progress)
             if self.is_mounted:
-                self.refresh_tree()
+                # Refresh the connection that was published to
+                self._refresh_connection(conn.id)
 
         progress_panel.display = False
 
         # Generate reports after all groups are done.
-        if self.is_mounted and self.connection is not None:
+        if self.is_mounted:
             from datetime import datetime, timezone
 
             ts = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -500,9 +918,12 @@ class GeoServerTree(Widget):
 
     def action_delete_selected(self) -> None:
         """Delete the selected resource after confirmation."""
-        if not self.connection:
+        result = self._get_selected_connection()
+        if not result:
             self.app.notify(_("No connection active"), severity="warning")
             return
+
+        conn, _ws = result
 
         tree = self.query_one("#gs-tree", Tree)
         if not tree.cursor_node or not tree.cursor_node.data:
@@ -510,10 +931,11 @@ class GeoServerTree(Widget):
             return
 
         data = tree.cursor_node.data
-        if not isinstance(data, GeoServerResource):
+        if not isinstance(data, TreeNodeData) or data.resource is None:
+            self.app.notify(_("Select a resource to delete"), severity="warning")
             return
 
-        resource_type = data.resource_type
+        resource_type = data.resource.resource_type
         name = data.name
 
         # Find parent workspace for stores/layers
@@ -540,51 +962,112 @@ class GeoServerTree(Widget):
             )
             return
 
+        # Find parent store name for layer deletion (walk up tree)
+        store_name = ""
+        if resource_type in ("layer", "coverage"):
+            parent_node = tree.cursor_node.parent
+            while parent_node:
+                if isinstance(
+                    parent_node.data, TreeNodeData
+                ) and parent_node.data.node_type in (
+                    "datastore",
+                    "coveragestore",
+                    "wmsstore",
+                ):
+                    store_name = parent_node.data.name
+                    break
+                parent_node = parent_node.parent
+
         def handle_confirm(confirmed: bool | None) -> None:
             if confirmed:
                 self.run_worker(
-                    self._do_delete(resource_type, name, ws_name or ""),
+                    self._do_delete(
+                        conn, resource_type, name, ws_name or "", store_name
+                    ),
                     exit_on_error=False,
                 )
 
+        # Require typing the name for stores and workspaces
+        require_name: str | None = None
+        if resource_type in (
+            "workspace",
+            "datastore",
+            "coveragestore",
+            "wmsstore",
+        ):
+            require_name = name
+
         self.app.push_screen(
-            ConfirmScreen(_("Confirm Delete"), msg),
+            ConfirmScreen(_("Confirm Delete"), msg, require_name=require_name),
             callback=handle_confirm,
         )
 
-    async def _do_delete(self, resource_type: str, name: str, workspace: str) -> None:
+    async def _do_delete(
+        self,
+        conn: Connection,
+        resource_type: str,
+        name: str,
+        workspace: str,
+        store: str = "",
+    ) -> None:
         """Execute the delete operation.
 
         Args:
+            conn: The GeoServer connection.
             resource_type: Type of resource to delete.
             name: Resource name.
             workspace: Parent workspace name.
+            store: Parent store name (for layer/coverage deletion).
         """
-        if self.connection is None:
-            return
-
-        async with GeoServerClient(self.connection) as client:
-            if resource_type == "workspace":
-                ok = await client.delete_workspace(name, recurse=True)
-            elif resource_type == "datastore":
-                ok = await client.delete_datastore(workspace, name, recurse=True)
-            elif resource_type == "coveragestore":
-                ok = await client.delete_coveragestore(workspace, name, recurse=True)
-            elif resource_type in ("layer", "coverage"):
-                ok = await client.delete_layer(workspace, name)
-            else:
-                ok = False
+        logger.info(
+            "Deleting %s '%s' (store='%s', workspace='%s') on '%s'",
+            resource_type,
+            name,
+            store,
+            workspace,
+            conn.name,
+        )
+        try:
+            decrypted = self._decrypt_conn(conn)
+            async with GeoServerClient(decrypted) as client:
+                if resource_type == "workspace":
+                    ok = await client.delete_workspace(name, recurse=True)
+                elif resource_type == "datastore":
+                    ok = await client.delete_datastore(workspace, name, recurse=True)
+                elif resource_type == "coveragestore":
+                    ok = await client.delete_coveragestore(
+                        workspace, name, recurse=True
+                    )
+                elif resource_type in ("layer", "coverage"):
+                    ok = await client.delete_layer(
+                        workspace, store, name, resource_type
+                    )
+                else:
+                    logger.warning("Unknown resource type: %s", resource_type)
+                    ok = False
+        except Exception:
+            logger.exception("Delete failed for %s '%s'", resource_type, name)
+            ok = False
 
         if self.is_mounted:
             if ok:
+                logger.info("Deleted %s '%s' successfully", resource_type, name)
                 self.app.notify(f"Deleted '{name}'", severity="information")
-                self.refresh_tree()
+                self._refresh_connection(conn.id)
             else:
+                logger.error("Failed to delete %s '%s'", resource_type, name)
                 self.app.notify(f"Failed to delete '{name}'", severity="error")
 
     def action_refresh(self) -> None:
-        """Refresh the tree."""
-        self.refresh_tree()
+        """Refresh the selected connection, or all connections if none selected."""
+        result = self._get_selected_connection()
+        if result:
+            conn, _ws = result
+            self._refresh_connection(conn.id)
+        else:
+            # No selection - refresh all connections
+            for conn_id in list(self._connections.keys()):
+                self._refresh_connection(conn_id)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle action panel buttons."""
@@ -595,36 +1078,42 @@ class GeoServerTree(Widget):
 
     def _do_create(self) -> None:
         """Execute the current create action."""
-        if not self.connection:
+        result = self._get_selected_connection()
+        if not result:
             return
+
+        conn, _ws = result
 
         if self._current_action == "workspace":
             name = self.query_one("#field1-input", Input).value.strip()
             if not name:
                 self.app.notify(_("Name is required"), severity="error")
                 return
-            self.run_worker(self._create_workspace(name), exit_on_error=False)
+            self.run_worker(self._create_workspace(conn, name), exit_on_error=False)
         elif self._current_action == "store_form" and self._selected_store_type:
             values = self._get_field_values(self._selected_store_type.fields)
             if not values.get("name"):
                 self.app.notify(_("Name is required"), severity="error")
                 return
             self.run_worker(
-                self._create_store(self._selected_store_type, values),
+                self._create_store(conn, self._selected_store_type, values),
                 exit_on_error=False,
             )
 
-    async def _create_workspace(self, name: str) -> None:
-        """Create a workspace via the API."""
-        if self.connection is None:
-            return
-        async with GeoServerClient(self.connection) as client:
+    async def _create_workspace(self, conn: Connection, name: str) -> None:
+        """Create a workspace via the API.
+
+        Args:
+            conn: The GeoServer connection.
+            name: Workspace name.
+        """
+        async with GeoServerClient(self._decrypt_conn(conn)) as client:
             ok = await client.create_workspace(name)
         if self.is_mounted:
             if ok:
                 self.app.notify(f"Workspace '{name}' created", severity="information")
                 self._hide_action_panel()
-                self.refresh_tree()
+                self._refresh_connection(conn.id)
             else:
                 self.app.notify(
                     f"Failed to create workspace '{name}'",
@@ -632,14 +1121,18 @@ class GeoServerTree(Widget):
                 )
 
     async def _create_store(
-        self, store_type: StoreType, field_values: dict[str, str]
+        self, conn: Connection, store_type: StoreType, field_values: dict[str, str]
     ) -> None:
-        """Create a store via the API using the type registry."""
-        if self.connection is None:
-            return
+        """Create a store via the API using the type registry.
+
+        Args:
+            conn: The GeoServer connection.
+            store_type: Store type definition.
+            field_values: Form field values.
+        """
         ws = self._current_workspace
         name = field_values.get("name", "")
-        async with GeoServerClient(self.connection) as client:
+        async with GeoServerClient(self._decrypt_conn(conn)) as client:
             ok = await client.create_store_from_type(ws, store_type, field_values)
         if self.is_mounted:
             if ok:
@@ -648,7 +1141,7 @@ class GeoServerTree(Widget):
                     severity="information",
                 )
                 self._hide_action_panel()
-                self.refresh_tree()
+                self._refresh_connection(conn.id)
             else:
                 self.app.notify(
                     f"Failed to create {store_type.label} '{name}'",
@@ -661,96 +1154,6 @@ class GeoServerTree(Widget):
         """Update styling when active state changes."""
         self.set_class(value, "active")
 
-    def watch_connection(self, value: Connection | None) -> None:
-        """React to connection changes."""
-        if value:
-            title = self.query_one("#tree-title", Label)
-            title.update(value.name)
-            title.set_class(True, "connected")
-            self._load_tree(value)
-        else:
-            title = self.query_one("#tree-title", Label)
-            title.update(_("GeoServer"))
-            title.set_class(False, "connected")
-            self.query_one("#no-connection", Static).display = True
-            self.query_one("#gs-tree", Tree).display = False
-
-    def _load_tree(self, conn: Connection) -> None:
-        """Start loading the GeoServer resource tree."""
-        self.loading = True
-        self.query_one("#no-connection", Static).display = False
-        self.query_one("#gs-tree", Tree).display = True
-        self.query_one("#tree-status", Static).update(_("Loading..."))
-        self.run_worker(self._fetch_tree(conn), exclusive=True, exit_on_error=False)
-
-    async def _fetch_tree(self, conn: Connection) -> None:
-        """Fetch and populate the tree from GeoServer."""
-        async with GeoServerClient(conn) as client:
-            try:
-                resources = await client.get_full_tree()
-                if not self.is_mounted:
-                    return
-                if not resources:
-                    status = self.query_one("#tree-status", Static)
-                    status.update(
-                        "[#CC0403]Server unreachable or returned no workspaces[/]"
-                    )
-                    self.app.notify(
-                        _(
-                            "Could not fetch workspaces. Check the "
-                            "server URL and credentials in Settings (F9)."
-                        ),
-                        severity="error",
-                        timeout=10,
-                    )
-                    return
-                self._populate_tree(resources)
-                count = sum(
-                    1 + len(ws.children) + sum(len(s.children) for s in ws.children)
-                    for ws in resources
-                )
-                ws_count = len(resources)
-                status = self.query_one("#tree-status", Static)
-                status.update(f"{ws_count} workspace(s), {count} total resources")
-            except Exception:
-                if self.is_mounted:
-                    status = self.query_one("#tree-status", Static)
-                    status.update("[#CC0403]Connection failed[/]")
-                    self.app.notify(
-                        _("Connection to GeoServer failed. Check Settings (F9)."),
-                        severity="error",
-                        timeout=10,
-                    )
-            finally:
-                self.loading = False
-
-    def _populate_tree(self, resources: list[GeoServerResource]) -> None:
-        """Populate the tree widget with GeoServer resources."""
-        tree = self.query_one("#gs-tree", Tree)
-        tree.clear()
-
-        for ws in resources:
-            ws_node = tree.root.add(
-                f"[bold {_COLORS['workspace']}]{ws.name}[/]",
-                data=ws,
-                expand=False,
-            )
-            for store in ws.children:
-                color = _COLORS.get(store.resource_type, _COLORS["default"])
-                label = _LABELS.get(store.resource_type, store.resource_type)
-                store_node = ws_node.add(
-                    f"[{color}]{store.name}[/] [{label}]",
-                    data=store,
-                    expand=False,
-                )
-                for layer in store.children:
-                    store_node.add_leaf(
-                        f"[{_COLORS['default']}]{layer.name}[/]",
-                        data=layer,
-                    )
-
-        tree.root.expand_all()
-
     @staticmethod
     def _store_color(resource_type: str) -> str:
         """Get the display color for a store type."""
@@ -762,6 +1165,8 @@ class GeoServerTree(Widget):
         return _LABELS.get(resource_type, resource_type)
 
     def refresh_tree(self) -> None:
-        """Refresh the tree from the current connection."""
-        if self.connection:
-            self._load_tree(self.connection)
+        """Refresh the tree - delegates to refresh_connections.
+
+        Kept for backwards compatibility with action_menu and other callers.
+        """
+        self.refresh_connections()

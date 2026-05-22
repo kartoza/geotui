@@ -1,0 +1,32 @@
+name: geotui
+version: '0.7.0'
+summary: Midnight Commander-style TUI for GeoServer management
+description: |
+  A beautiful terminal user interface for managing GeoServer instances.
+  Built with Python/Textual. Supports shapefile, GeoPackage, and GeoTIFF
+  publishing with PDF reports.
+
+  Made with love by Kartoza (https://kartoza.com)
+base: core22
+grade: stable
+confinement: strict
+
+apps:
+  geotui:
+    command: bin/geotui
+    plugs:
+      - home
+      - network
+      - network-bind
+
+parts:
+  geotui:
+    plugin: python
+    source: .
+    python-packages:
+      - .
+    build-packages:
+      - python3-dev
+      - libffi-dev
+    stage-packages:
+      - libffi8

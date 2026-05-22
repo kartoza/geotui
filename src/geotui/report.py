@@ -57,6 +57,40 @@ _TABLE_BORDER = (0xE0, 0xE0, 0xE0)
 # ---------------------------------------------------------------------------
 
 
+def _shorten_error(error: str) -> str:
+    """Shorten an error message to a brief summary for the table.
+
+    Full details are in the warnings section above the table.
+
+    Args:
+        error: Full error message.
+
+    Returns:
+        Short summary like "Missing (shx)" or "HTTP 500".
+    """
+    if not error:
+        return ""
+    low = error.lower()
+    if "missing" in low:
+        # Extract what's missing from "Incomplete bundle ... missing .shx, .dbf"
+        if "missing" in error:
+            parts = error.split("missing")[-1].strip().rstrip(".")
+            return f"Missing ({parts})"
+    if "http" in low:
+        # "HTTP 500: java.io.IOException" -> "HTTP 500"
+        for word in error.split():
+            if word.isdigit() and len(word) == 3:
+                return f"HTTP {word}"
+    if "timeout" in low:
+        return "Timeout"
+    if "connect" in low:
+        return "Connect err"
+    if "auth" in low:
+        return "Auth failed"
+    # Fallback: first 15 chars
+    return error[:15]
+
+
 def _format_size(num_bytes: int) -> str:
     """Return a human-readable file size string."""
     value: float = float(num_bytes)
@@ -420,8 +454,8 @@ class _PublishPDF(FPDF):
 
     def _table_header_row(self) -> None:
         """Render a single table header row."""
-        self.set_fill_color(*_DARK)
-        self.set_text_color(*_WHITE)
+        self.set_fill_color(*_WHITE)
+        self.set_text_color(*_DARK)
         self.set_draw_color(*_TABLE_BORDER)
         self.set_line_width(0.2)
         self.set_font("Helvetica", "B", 8)
@@ -493,7 +527,7 @@ class _PublishPDF(FPDF):
                 "Status": result.status,
                 "Size": _format_size(result.file_size),
                 "Time": f"{result.upload_time:.2f}s",
-                "Error": result.error or "",
+                "Error": _shorten_error(result.error) if result.error else "",
             }
 
             for col in _TABLE_COLS:

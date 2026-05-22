@@ -45,7 +45,7 @@ graph TB
 | Rich Text | Rich |
 | HTTP Client | httpx |
 | Data Validation | Pydantic |
-| Credential Storage | keyring |
+| Credential Encryption | cryptography (Fernet/PBKDF2) |
 | Build System | Hatch |
 | Dev Environment | Nix Flake |
 
@@ -150,10 +150,15 @@ graph TB
 - gettext-based translation system
 
 ### FR-004: Security
-- No plain-text credential storage
-- HTTPS connections enforced
-- Input validation on all user inputs
-- No command injection vectors
+- **Master Password Vault**: All connection passwords encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256) with PBKDF2-HMAC-SHA256 key derivation (600k iterations)
+- **Startup Unlock**: TUI prompts for master password during startup; CLI prompts before accessing connections (3 attempts max)
+- **Vault Setup**: First-time users prompted to create a master password (min 8 characters, confirmation required)
+- **Password Change**: Re-encrypts all stored credentials with new key derived from new password
+- **Vault Reset**: Wipes all connections when master password is forgotten (requires explicit confirmation)
+- **File Permissions**: Config file restricted to 0o600, config directory to 0o700
+- **Input Validation**: GeoServer resource names validated against `[a-zA-Z0-9_.\-]+` regex (max 256 chars)
+- **No Command Injection**: Subprocess calls use list args, no shell=True
+- HTTPS connections enforced (verify=True on all httpx calls)
 
 ### FR-005: Cross-Platform
 - Windows (PowerShell) support
@@ -193,14 +198,17 @@ graph TB
 - Configuration persisted as JSON in XDG config directory
 - Atomic file writes prevent corruption
 
-### FR-007: GeoServer Resource Tree
-- Right pane displays GeoServer resource hierarchy from active connection
-- Tree shows: Workspaces > Stores (data/coverage/WMS) > Layers/Coverages
-- Workspaces shown in blue, stores color-coded by type (teal=vector, orange=raster, blue=WMS)
-- Tree loads asynchronously via worker thread
-- Active connection restored on app startup
-- Empty state shows "No connection active" message
-- Refresh capability for reloading tree data
+### FR-007: Multi-Connection GeoServer Tree
+- Right pane shows all saved connections under a "GeoServer" root node
+- Each connection is a collapsible node with lazy loading on expand
+- Connection states: grey (untested), teal (connected), red (failed)
+- Expanding a connection node tests connectivity then fetches hierarchy
+- Tree shows: Connection > Workspaces > Stores > Layers/Coverages
+- Failed connections show red node with error message as child
+- R key retries a failed connection
+- F5/F8/F2 actions target whichever connection is highlighted
+- No background polling - retry is manual only
+- Adding/removing connections in F9 updates tree immediately
 
 ### FR-008: F5 Copy-to-Publish
 - Midnight Commander F5 paradigm: select folder left, workspace/store right, F5
@@ -232,6 +240,7 @@ graph TB
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 0.6.0 | 2026-05-21 | Multi-connection tree, lazy loading, connection states |
 | 0.5.0 | 2026-05-21 | F5 copy-to-publish, multi-format support, replaces F2 bulk publish |
 | 0.4.0 | 2026-05-20 | Bulk shapefile publisher, PDF/JSON reports, CLI interface |
 | 0.3.0 | 2026-05-19 | GeoServer resource tree in right pane, full REST API client |

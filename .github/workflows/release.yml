@@ -36,6 +36,9 @@ jobs:
           - os: macos-latest
             artifact: geotui-macos-amd64
             binary: dist/geotui
+          - os: macos-14
+            artifact: geotui-macos-arm64
+            binary: dist/geotui
           - os: windows-latest
             artifact: geotui-windows-amd64.exe
             binary: dist/geotui.exe
@@ -210,6 +213,49 @@ jobs:
           name: geotui-appimage
           path: "*.AppImage"
 
+  # ── Flatpak package ─────────────────────────────────────
+  build-flatpak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists \
+            flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y \
+            flathub org.freedesktop.Platform//23.08 \
+            org.freedesktop.Sdk//23.08
+      - name: Build Flatpak bundle
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          flatpak-builder --user --install-deps-from=flathub \
+            --force-clean build-dir flatpak/com.kartoza.GeoTUI.yml
+          flatpak build-export repo build-dir
+          flatpak build-bundle repo \
+            GeoTUI-${VERSION}.flatpak com.kartoza.GeoTUI
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-flatpak
+          path: "*.flatpak"
+
+  # ── Snap package ─────────────────────────────────────────
+  build-snap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/^version: .*/version: '${VERSION}'/" snap/snapcraft.yaml
+      - uses: snapcore/action-build@v1
+        id: build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-snap
+          path: ${{ steps.build.outputs.snap }}
+
   # ── Publish to PyPI ──────────────────────────────────────
   publish-pypi:
     needs: build-python
@@ -230,6 +276,8 @@ jobs:
       - build-deb
       - build-rpm
       - build-appimage
+      - build-snap
+      - build-flatpak
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -246,7 +294,10 @@ jobs:
             artifacts/python-dist/*
             artifacts/geotui-linux-amd64/*
             artifacts/geotui-macos-amd64/*
+            artifacts/geotui-macos-arm64/*
             artifacts/geotui-windows-amd64.exe/*
             artifacts/geotui-deb/*
             artifacts/geotui-rpm/**/*
             artifacts/geotui-appimage/*
+            artifacts/geotui-snap/*
+            artifacts/geotui-flatpak/*

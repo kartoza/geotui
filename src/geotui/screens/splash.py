@@ -82,4 +82,4 @@ class SplashScreen(Screen[None]):
     def _dismiss(self) -> None:
         """Close the splash screen."""
         if self.is_current:
-            self.app.pop_screen()
+            self.dismiss(None)

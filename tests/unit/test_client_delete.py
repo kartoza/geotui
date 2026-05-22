@@ -40,5 +40,5 @@ class TestClientDeleteMethods:
     async def test_delete_layer_unreachable(self, unreachable_conn: Connection) -> None:
         """Test delete_layer returns False for unreachable server."""
         async with GeoServerClient(unreachable_conn, timeout=1.0) as client:
-            result = await client.delete_layer("ws", "my_layer")
+            result = await client.delete_layer("ws", "my_store", "my_layer")
             assert result is False

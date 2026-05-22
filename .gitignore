@@ -40,6 +40,8 @@ result-*
 PROMPT.log
 claude.sh
 claude.out
+.geotui/
+screenshots/
 
 # OS
 .DS_Store

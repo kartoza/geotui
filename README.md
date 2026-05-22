@@ -30,41 +30,76 @@ GeoTUI is a terminal user interface (TUI) application for managing GeoServer ins
 - **Cross-Platform** - Runs on Windows, Linux, and macOS
 - **Project-Local Config** - Config and reports stored in `.geotui/` within your working directory
 - **Internationalization** - English, Portuguese, and Spanish (switchable with Ctrl+L)
-- **Secure by Design** - Keyring-based credential storage, HTTPS by default
+- **Secure by Design** - Master password encrypted vault (AES-256), HTTPS by default
 - **Keyboard-Driven** - Full function key bindings just like MC
 
 ## Installation
 
-### Standalone Binary (no Python required)
+### Download Pre-Built Packages
 
-Download and copy the binary to your PATH:
+Download the latest release from the [GitHub Releases](https://github.com/kartoza/geotui/releases) page.
+
+#### Linux
+
+| Format | File | Install Command |
+|--------|------|-----------------|
+| **AppImage** | `GeoTUI-x.y.z-x86_64.AppImage` | `chmod +x GeoTUI-*.AppImage && ./GeoTUI-*.AppImage` |
+| **Debian/Ubuntu** | `geotui_x.y.z_amd64.deb` | `sudo dpkg -i geotui_*.deb` |
+| **Fedora/RHEL** | `geotui-x.y.z-1.x86_64.rpm` | `sudo rpm -i geotui-*.rpm` |
+| **Snap** | `geotui_x.y.z_amd64.snap` | `sudo snap install --dangerous geotui_*.snap` |
+| **Flatpak** | `GeoTUI-x.y.z.flatpak` | `flatpak install GeoTUI-*.flatpak` |
+| **Standalone** | `geotui-linux-amd64` | `chmod +x geotui-linux-amd64 && sudo cp geotui-linux-amd64 /usr/local/bin/geotui` |
+
+> **Note on unsigned packages:** The .deb, .rpm, and .snap packages are not signed with
+> a distribution key. For .deb you may see a warning from `dpkg` which is safe to
+> proceed past. For .snap you must use the `--dangerous` flag. For .rpm on systems with
+> GPG checking enabled, use `sudo rpm -i --nosignature geotui-*.rpm`.
+
+#### macOS
+
+| Architecture | File |
+|-------------|------|
+| **Intel (x86_64)** | `geotui-macos-amd64` |
+| **Apple Silicon (M1/M2/M3)** | `geotui-macos-arm64` |
 
 ```bash
-# Build the standalone binary
-make standalone
-
-# Install to /usr/local/bin so it's available everywhere
-make install-bin
+# Download the correct binary for your Mac, then:
+chmod +x geotui-macos-*
+sudo cp geotui-macos-* /usr/local/bin/geotui
 ```
 
-Or manually:
+> **macOS Gatekeeper warning:** Because the binary is not notarised with an Apple
+> Developer certificate, macOS will block it on first run. To allow it:
+>
+> 1. Try to run `geotui` in Terminal - you will see *"geotui" cannot be opened because the developer cannot be verified.*
+> 2. Open **System Settings > Privacy & Security** and scroll to the bottom.
+> 3. Click **"Allow Anyway"** next to the GeoTUI message.
+> 4. Run `geotui` again and click **"Open"** in the confirmation dialog.
+>
+> Alternatively, remove the quarantine attribute before first run:
+> ```bash
+> xattr -d com.apple.quarantine /usr/local/bin/geotui
+> ```
 
-```bash
-sudo cp dist/geotui /usr/local/bin/geotui
+#### Windows
+
+Download `geotui-windows-amd64.exe` from the release page.
+
+```powershell
+# Move to a directory in your PATH, e.g.:
+Move-Item geotui-windows-amd64.exe "$env:LOCALAPPDATA\Microsoft\WindowsApps\geotui.exe"
 ```
 
-### Using pipx (recommended for Python users)
-
-```bash
-make install
-# or:
-pipx install .
-```
+> **Windows SmartScreen warning:** Because the .exe is not code-signed, Windows
+> Defender SmartScreen may show *"Windows protected your PC"*. Click
+> **"More info"** then **"Run anyway"**. This happens once per new version.
 
 ### From PyPI
 
 ```bash
 pip install geotui
+# or with pipx (recommended):
+pipx install geotui
 ```
 
 ### Using Nix / NixOS
@@ -127,7 +162,8 @@ The file pane opens at your current directory. Config and reports are saved to `
 | `F7` | Create directory |
 | `F8` | Delete |
 | `F9` | Settings |
-| `F10` / `q` | Quit |
+| `F10` | Quit |
+| `Ctrl+T` | Toggle file selection |
 | `Ctrl+L` | Cycle language |
 
 ## Project-Local Configuration
