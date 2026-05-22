@@ -215,40 +215,35 @@ jobs:
           name: geotui-appimage
           path: "*.AppImage"
 
-  # ── Flatpak package ─────────────────────────────────────
-  build-flatpak:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Flatpak tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists \
-            flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y \
-            flathub org.freedesktop.Platform//24.08 \
-            org.freedesktop.Sdk//24.08
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Pre-download wheels for offline install
-        run: |
-          pip install build && python -m build --wheel
-          mkdir -p wheels
-          pip download --dest wheels .
-      - name: Build Flatpak bundle
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          flatpak-builder --user --install-deps-from=flathub \
-            --force-clean build-dir flatpak/com.kartoza.GeoTUI.yml
-          flatpak build-export repo build-dir
-          flatpak build-bundle repo \
-            GeoTUI-${VERSION}.flatpak com.kartoza.GeoTUI
-      - uses: actions/upload-artifact@v4
-        with:
-          name: geotui-flatpak
-          path: "*.flatpak"
+  # ── Flatpak package (disabled - needs flatpak-pip-generator for offline deps) ──
+  # build-flatpak:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install Flatpak tools
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y flatpak flatpak-builder
+  #         flatpak remote-add --user --if-not-exists \
+  #           flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+  #         flatpak install --user -y \
+  #           flathub org.freedesktop.Platform//24.08 \
+  #           org.freedesktop.Sdk//24.08
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.12"
+  #     - name: Build Flatpak bundle
+  #       run: |
+  #         VERSION=${GITHUB_REF_NAME#v}
+  #         flatpak-builder --user --install-deps-from=flathub \
+  #           --force-clean build-dir flatpak/com.kartoza.GeoTUI.yml
+  #         flatpak build-export repo build-dir
+  #         flatpak build-bundle repo \
+  #           GeoTUI-${VERSION}.flatpak com.kartoza.GeoTUI
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: geotui-flatpak
+  #         path: "*.flatpak"
 
   # ── Snap package ─────────────────────────────────────────
   build-snap:
@@ -310,7 +305,7 @@ jobs:
       - build-rpm
       - build-appimage
       - build-snap
-      - build-flatpak
+      # - build-flatpak  # TODO: fix offline dep vendoring
       - release-sbom
     runs-on: ubuntu-latest
     steps:
@@ -402,5 +397,4 @@ jobs:
             artifacts/geotui-rpm/**/*
             artifacts/geotui-appimage/*
             artifacts/geotui-snap/*
-            artifacts/geotui-flatpak/*
             artifacts/geotui-sbom/*
