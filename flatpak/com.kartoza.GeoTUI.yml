@@ -1,6 +1,6 @@
 app-id: com.kartoza.GeoTUI
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: geotui
 
@@ -12,6 +12,7 @@ modules:
   - name: python3-geotui
     buildsystem: simple
     build-commands:
+      - pip3 install --no-build-isolation --prefix=/app hatchling
       - pip3 install --no-build-isolation --prefix=/app .
     sources:
       - type: dir
