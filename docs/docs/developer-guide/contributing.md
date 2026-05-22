@@ -154,6 +154,8 @@ geotui/
 │   ├── unit/            # Unit tests
 │   └── bdd/             # BDD feature tests
 ├── docs/                # MkDocs documentation
+├── resources/           # Test data and resources
+├── scripts/             # Build and utility scripts
 ├── .github/workflows/   # CI/CD pipelines
 ├── flake.nix            # Nix development environment
 ├── pyproject.toml       # Python project configuration
