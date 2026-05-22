@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  actions: read
 
 jobs:
   # ── Build artifacts for PR testing ─────────────────────────
@@ -221,3 +222,38 @@ jobs:
             safety-results.json
             bandit-results.json
           retention-days: 30
+
+  # ── Post artifact summary to PR ────────────────────────────
+  artifact-comment:
+    needs:
+      - build-binary
+      - build-python
+      - sbom
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate artifact table
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          cat > artifacts-comment.md << 'MEOF'
+          ## Build Artifacts
+
+          Download pre-built binaries to test this PR (available for 7 days):
+
+          | Platform | Artifact |
+          |----------|----------|
+          | Linux x86_64 | `geotui-linux-amd64` |
+          | macOS Intel | `geotui-macos-amd64` |
+          | macOS Apple Silicon | `geotui-macos-arm64` |
+          | Windows x86_64 | `geotui-windows-amd64.exe` |
+          | Python wheel/sdist | `geotui-*.whl` |
+          | SBOM (CycloneDX) | `sbom.json` |
+          MEOF
+          echo "" >> artifacts-comment.md
+          echo "> **[Download all artifacts from this workflow run](${RUN_URL}#artifacts)**" >> artifacts-comment.md
+          echo "> Scroll to the bottom of the run page for the Artifacts section." >> artifacts-comment.md
+      - name: Post artifact comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: build-artifacts
+          path: artifacts-comment.md
