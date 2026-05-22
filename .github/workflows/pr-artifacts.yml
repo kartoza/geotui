@@ -139,31 +139,20 @@ jobs:
               found = []
               for dep in vulns:
                   for v in dep.get("vulns", []):
-                      severity = v.get("fix_versions", ["unknown"])
                       vid = v.get("id", "unknown")
-                      desc = v.get("description", "")[:100]
                       pkg = dep.get("name", "unknown")
                       ver = dep.get("version", "unknown")
-                      # Determine severity from ID prefix
-                      if "CRITICAL" in desc.upper() or "PYSEC" in vid:
-                          sev = "CRITICAL"
-                          color = "red"
-                          has_critical = True
-                      elif "HIGH" in desc.upper():
-                          sev = "HIGH"
-                          color = "orange"
-                      elif "MEDIUM" in desc.upper() or "MODERATE" in desc.upper():
-                          sev = "MEDIUM"
-                          color = "yellow"
-                      else:
-                          sev = "LOW"
-                          color = "green"
+                      # pip-audit results in this workflow do not provide a reliable
+                      # normalized severity field. Avoid substring heuristics and gate
+                      # on the presence of any reported vulnerability from the scanner.
+                      sev = "UNSPECIFIED"
+                      has_critical = True
                       found.append((pkg, ver, vid, sev))
               if found:
                   report_lines.append("| Package | Version | CVE | Severity |")
                   report_lines.append("|---------|---------|-----|----------|")
                   for pkg, ver, vid, sev in found:
-                      emoji = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(sev, "⚪")
+                      emoji = {"UNSPECIFIED": "⚪"}.get(sev, "⚪")
                       report_lines.append(f"| {pkg} | {ver} | {vid} | {emoji} {sev} |")
               else:
                   report_lines.append("✅ No known vulnerabilities found.\n")
