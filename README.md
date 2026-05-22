@@ -2,42 +2,44 @@
 
 <div align="center">
 
-```
-    ,,,
-   (o o)   GeoTUI
-   ( _ )   GeoServer Manager
-    |||
-   / | \   An otter-powered TUI
-```
+<img src="geotui-logo.png" alt="GeoTUI Logo" width="500">
 
-**A beautiful Midnight Commander-style TUI for GeoServer management**
+**A Midnight Commander-style terminal interface for GeoServer management**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/kartoza/geotui/actions/workflows/ci.yml/badge.svg)](https://github.com/kartoza/geotui/actions)
-[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue.svg)](https://kartoza.github.io/geotui)
+[![GitHub Release](https://img.shields.io/github/v/release/kartoza/geotui?style=flat-square)](https://github.com/kartoza/geotui/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg?style=flat-square)](https://www.python.org/downloads/)
+[![CI](https://github.com/kartoza/geotui/actions/workflows/ci.yml/badge.svg)](https://github.com/kartoza/geotui/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-kartoza.github.io%2Fgeotui-blue.svg?style=flat-square)](https://kartoza.github.io/geotui)
 
 </div>
 
-## Overview
+![GeoTUI publishing shapefiles to a GeoServer instance](docs/docs/assets/images/geotui-screenshot.png)
 
-GeoTUI is a terminal user interface (TUI) application for managing GeoServer instances. Built with [Textual](https://textual.textualize.io/) and [Rich](https://rich.readthedocs.io/), it provides a familiar Midnight Commander-style dual-pane interface that runs everywhere: Windows (PowerShell), Linux, and macOS.
+## What is GeoTUI?
+
+GeoTUI is a terminal application for managing [GeoServer](https://geoserver.org/) instances. Browse your local geospatial files on the left, manage GeoServer workspaces and layers on the right — then publish data with a single keystroke.
+
+**Who is it for?** GIS administrators, data engineers, and anyone who publishes geospatial data to GeoServer.
+
+**Why use it?** Publishing data to GeoServer normally means navigating the web admin, uploading files, configuring stores, and creating layers through a browser. GeoTUI does all of this with F5: select your files, pick a workspace, press publish. It also generates PDF reports of every operation.
 
 ## Features
 
-- **Midnight Commander Layout** - Dual-pane interface with rounded borders
-- **Kartoza Branded** - Beautiful color scheme with yellow/orange, blue, teal, and grey accents
-- **Cross-Platform** - Runs on Windows, Linux, and macOS
-- **Project-Local Config** - Config and reports stored in `.geotui/` within your working directory
-- **Internationalization** - English, Portuguese, and Spanish (switchable with Ctrl+L)
-- **Secure by Design** - Master password encrypted vault (AES-256), HTTPS by default
-- **Keyboard-Driven** - Full function key bindings just like MC
+- **Dual-pane interface** — local files on the left, GeoServer tree on the right
+- **One-click publishing** — Shapefiles, GeoPackages, and GeoTIFFs via F5
+- **Multiple connections** — manage several GeoServer instances simultaneously
+- **PDF reports** — every publish generates a detailed report
+- **Encrypted credentials** — AES-encrypted vault with PBKDF2 key derivation (600k iterations)
+- **Cross-platform** — standalone binaries for Windows, Linux, and macOS
+- **Multilingual** — English, Portuguese, and Spanish (Ctrl+L to switch)
+- **Kartoza branded** — beautiful orange, teal, and blue colour scheme
 
 ## Installation
 
-### Download Pre-Built Packages
+### Download Pre-Built Binaries
 
-Download the latest release from the [GitHub Releases](https://github.com/kartoza/geotui/releases) page.
+Download the latest release from [GitHub Releases](https://github.com/kartoza/geotui/releases/latest).
 
 #### Linux
 
@@ -47,13 +49,9 @@ Download the latest release from the [GitHub Releases](https://github.com/kartoz
 | **Debian/Ubuntu** | `geotui_x.y.z_amd64.deb` | `sudo dpkg -i geotui_*.deb` |
 | **Fedora/RHEL** | `geotui-x.y.z-1.x86_64.rpm` | `sudo rpm -i geotui-*.rpm` |
 | **Snap** | `geotui_x.y.z_amd64.snap` | `sudo snap install --dangerous geotui_*.snap` |
-| **Flatpak** | `GeoTUI-x.y.z.flatpak` | `flatpak install GeoTUI-*.flatpak` |
 | **Standalone** | `geotui-linux-amd64` | `chmod +x geotui-linux-amd64 && sudo cp geotui-linux-amd64 /usr/local/bin/geotui` |
 
-> **Note on unsigned packages:** The .deb, .rpm, and .snap packages are not signed with
-> a distribution key. For .deb you may see a warning from `dpkg` which is safe to
-> proceed past. For .snap you must use the `--dangerous` flag. For .rpm on systems with
-> GPG checking enabled, use `sudo rpm -i --nosignature geotui-*.rpm`.
+> **Unsigned packages:** .deb, .rpm, and .snap packages are not signed with a distribution key. For Snap use `--dangerous`. For RPM with GPG checking: `sudo rpm -i --nosignature geotui-*.rpm`.
 
 #### macOS
 
@@ -63,36 +61,15 @@ Download the latest release from the [GitHub Releases](https://github.com/kartoz
 | **Apple Silicon (M1/M2/M3)** | `geotui-macos-arm64` |
 
 ```bash
-# Download the correct binary for your Mac, then:
 chmod +x geotui-macos-*
 sudo cp geotui-macos-* /usr/local/bin/geotui
 ```
 
-> **macOS Gatekeeper warning:** Because the binary is not notarised with an Apple
-> Developer certificate, macOS will block it on first run. To allow it:
->
-> 1. Try to run `geotui` in Terminal - you will see *"geotui" cannot be opened because the developer cannot be verified.*
-> 2. Open **System Settings > Privacy & Security** and scroll to the bottom.
-> 3. Click **"Allow Anyway"** next to the GeoTUI message.
-> 4. Run `geotui` again and click **"Open"** in the confirmation dialog.
->
-> Alternatively, remove the quarantine attribute before first run:
-> ```bash
-> xattr -d com.apple.quarantine /usr/local/bin/geotui
-> ```
+> **Gatekeeper:** Run `xattr -d com.apple.quarantine /usr/local/bin/geotui` or allow in System Settings > Privacy & Security on first launch.
 
 #### Windows
 
-Download `geotui-windows-amd64.exe` from the release page.
-
-```powershell
-# Move to a directory in your PATH, e.g.:
-Move-Item geotui-windows-amd64.exe "$env:LOCALAPPDATA\Microsoft\WindowsApps\geotui.exe"
-```
-
-> **Windows SmartScreen warning:** Because the .exe is not code-signed, Windows
-> Defender SmartScreen may show *"Windows protected your PC"*. Click
-> **"More info"** then **"Run anyway"**. This happens once per new version.
+Download `geotui-windows-amd64.exe`. On first launch, click **More info** then **Run anyway** when SmartScreen appears.
 
 ### From PyPI
 
@@ -102,15 +79,10 @@ pip install geotui
 pipx install geotui
 ```
 
-### Using Nix / NixOS
+### Using Nix
 
 ```bash
-# Run directly without installing
 nix run github:kartoza/geotui
-
-# Or build locally
-make nix-build
-./result/bin/geotui
 ```
 
 ### From Source
@@ -124,101 +96,63 @@ python -m geotui
 
 ## Quick Start
 
-Run `geotui` from your project directory:
-
 ```bash
-cd /path/to/your/geodata
 geotui
 ```
 
-The file pane opens at your current directory. Config and reports are saved to `.geotui/` inside your working directory, so each project keeps its own GeoServer connections and publish logs.
+1. Press **F9** to open Settings
+2. Click **Add** and enter your GeoServer URL, username, and password
+3. Click **Connect** to test, then **Escape** to return to the main view
+4. Navigate to your data files in the left pane
+5. Select a workspace in the right pane
+6. Press **F5** to publish
 
-## Makefile Reference
-
-| Command | Description |
-|---|---|
-| `make install` | Install via pipx (globally available) |
-| `make install-bin` | Build standalone binary and copy to `/usr/local/bin` |
-| `make standalone` | Build standalone binary to `dist/geotui` |
-| `make nix-build` | Build via Nix flake (for NixOS) |
-| `make nix-run` | Run directly via Nix (for NixOS) |
-| `make build` | Build wheel and source distribution |
-| `make install-dev` | Install in editable mode for development |
-| `make test` | Run test suite |
-| `make lint` | Run ruff linter |
-| `make format` | Format code |
-| `make docs` | Serve documentation locally |
-| `make clean` | Remove build artifacts |
+For a detailed walkthrough with screenshots, see the [Getting Started guide](https://kartoza.github.io/geotui/user-guide/getting-started/).
 
 ## Key Bindings
 
 | Key | Action |
 |-----|--------|
 | `Tab` | Switch between panes |
-| `F1` | Help |
-| `F2` | Menu |
-| `F5` | Copy / Publish to GeoServer |
-| `F6` | Move |
+| `F2` | GeoServer Actions (create workspace, etc.) |
+| `F5` | Publish selected files to GeoServer |
 | `F7` | Create directory |
 | `F8` | Delete |
-| `F9` | Settings |
-| `F10` | Quit |
-| `Ctrl+T` | Toggle file selection |
-| `Ctrl+L` | Cycle language |
+| `F9` | Settings / Connection manager |
+| `F10` / `q` | Quit |
+| `Ctrl+L` | Cycle language (EN / PT / ES) |
 
-## Project-Local Configuration
+## Documentation
 
-GeoTUI stores all config and reports relative to where you run it:
+Full documentation: [kartoza.github.io/geotui](https://kartoza.github.io/geotui)
 
-```
-your-project/
-└── .geotui/
-    ├── config.json      # GeoServer connections for this project
-    └── reports/         # Publish reports (PDF + JSON)
-```
-
-Add `.geotui/` to your `.gitignore` to keep credentials out of version control.
+- [Getting Started](https://kartoza.github.io/geotui/user-guide/getting-started/) — install, connect, publish
+- [Navigation](https://kartoza.github.io/geotui/user-guide/navigation/) — keyboard shortcuts and workflows
+- [Configuration](https://kartoza.github.io/geotui/user-guide/configuration/) — vault, language, colours
+- [Architecture](https://kartoza.github.io/geotui/developer-guide/architecture/) — module structure and design
+- [Contributing](https://kartoza.github.io/geotui/developer-guide/contributing/) — development setup
 
 ## Development
 
 ```bash
-# Enter dev environment
-nix develop
-
-# Run the app
-python -m geotui
-
-# Run tests
-pytest
-
-# Lint
-ruff check src/ tests/
-
-# Build docs
-cd docs && mkdocs serve
+nix develop                    # Enter dev environment
+python -m geotui               # Run the app
+pytest                         # Run tests
+ruff check src/ tests/         # Lint
+cd docs && mkdocs serve        # Serve docs locally
 ```
-
-## Documentation
-
-Full documentation is available at [kartoza.github.io/geotui](https://kartoza.github.io/geotui).
-
-## Mascot
-
-GeoTUI is guided by an industrious otter - because otters are excellent navigators of both water and land, just like GeoTUI navigates your geospatial infrastructure.
 
 ## Contributing
 
-We welcome contributions! Please see the [Contributing Guide](https://kartoza.github.io/geotui/developer-guide/contributing/) for details.
+We welcome contributions! See the [Contributing Guide](https://kartoza.github.io/geotui/developer-guide/contributing/) for development setup, code style, and workflow.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ## Sustainable Funding
 
-If you find GeoTUI useful, please consider supporting its development:
-
-- [GitHub Sponsors](https://github.com/sponsors/kartoza)
+If you find GeoTUI useful, please consider supporting its development through [GitHub Sponsors](https://github.com/sponsors/kartoza).
 
 ---
 
