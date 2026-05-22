@@ -998,6 +998,7 @@ async def test_connection(conn: Connection, timeout: float = 10.0) -> Connection
 
     url = await resolve_base_url(conn.url, conn.username, conn.password, timeout)
     endpoint = f"{url}/rest/about/version.json"
+    conn_detail = f"endpoint={endpoint}, user={conn.username}, password=***"
 
     try:
         async with httpx.AsyncClient(timeout=timeout, verify=True) as client:
@@ -1041,8 +1042,17 @@ async def test_connection(conn: Connection, timeout: float = 10.0) -> Connection
                     message=f"Server returned HTTP {response.status_code}",
                 )
     except httpx.ConnectTimeout:
-        return ConnectionResult(success=False, message="Connection timed out")
-    except httpx.ConnectError:
-        return ConnectionResult(success=False, message=f"Cannot connect to {url}")
+        return ConnectionResult(
+            success=False,
+            message=f"Connection timed out ({conn_detail})",
+        )
+    except httpx.ConnectError as e:
+        return ConnectionResult(
+            success=False,
+            message=f"Cannot connect to {url}: {e} ({conn_detail})",
+        )
     except httpx.RequestError as e:
-        return ConnectionResult(success=False, message=f"Request error: {e}")
+        return ConnectionResult(
+            success=False,
+            message=f"Request error: {e} ({conn_detail})",
+        )
