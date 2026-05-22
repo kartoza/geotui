@@ -73,7 +73,7 @@
 
         packages.default = pythonPkgs.buildPythonPackage {
           pname = "geotui";
-          version = "0.7.0";
+          version = "1.0.0";
           src = ./.;
           format = "pyproject";
 
