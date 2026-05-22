@@ -110,8 +110,8 @@ jobs:
         id: safety
         continue-on-error: true
         run: |
-          safety check --output json > safety-results.json 2>&1 || true
-          safety check 2>&1 | tee safety-output.txt || true
+          safety check --output json > safety-results.json 2> safety-results.stderr.txt || true
+          safety check 2> safety-output.stderr.txt | tee safety-output.txt || true
       - name: Run bandit security scan
         id: bandit
         run: |
