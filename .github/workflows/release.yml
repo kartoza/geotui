@@ -258,6 +258,27 @@ jobs:
           name: geotui-snap
           path: ${{ steps.build.outputs.snap }}
 
+  # ── SBOM for release ─────────────────────────────────────
+  release-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project
+        run: pip install -e ".[dev]"
+      - name: Generate SBOM
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py environment \
+            --output geotui-sbom.json \
+            --format json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-sbom
+          path: geotui-sbom.json
+
   # ── Publish to PyPI (disabled until trusted publisher configured) ──
   # To enable: configure a trusted publisher at https://pypi.org/manage/project/geotui/settings/publishing/
   # publish-pypi:
@@ -282,6 +303,7 @@ jobs:
       - build-appimage
       - build-snap
       - build-flatpak
+      - release-sbom
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -305,3 +327,4 @@ jobs:
             artifacts/geotui-appimage/*
             artifacts/geotui-snap/*
             artifacts/geotui-flatpak/*
+            artifacts/geotui-sbom/*
