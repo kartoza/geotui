@@ -47,8 +47,8 @@ screenshots/
 .DS_Store
 Thumbs.db
 
-# i18n compiled
-*.mo
+# i18n compiled — but keep locale .mo files (needed at runtime)
+!src/geotui/i18n/locales/**/*.mo
 
 # Environment
 .env

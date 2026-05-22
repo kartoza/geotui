@@ -2,12 +2,13 @@
 # Copyright (C) 2026 Kartoza (Pty) Ltd
 msgid ""
 msgstr ""
-"Project-Id-Version: geotui 0.1.0\n"
+"Project-Id-Version: geotui 1.0.0\n"
 "Language: pt\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+# App bindings
 msgid "Quit"
 msgstr "Sair"
 
@@ -38,9 +39,11 @@ msgstr "Configuracoes"
 msgid "Language"
 msgstr "Idioma"
 
+# Status bar
 msgid "Ready"
 msgstr "Pronto"
 
+# Help
 msgid "Help - Press F1 for assistance"
 msgstr "Ajuda - Pressione F1 para assistencia"
 
@@ -50,6 +53,7 @@ msgstr "Ajuda GeoTUI"
 msgid "Create Directory"
 msgstr "Criar Diretorio"
 
+# Pane labels
 msgid "Left"
 msgstr "Esquerda"
 
@@ -58,3 +62,211 @@ msgstr "Direita"
 
 msgid "Files"
 msgstr "Arquivos"
+
+# Settings screen
+msgid "Back"
+msgstr "Voltar"
+
+msgid "Add"
+msgstr "Adicionar"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Test"
+msgstr "Testar"
+
+msgid "Connections"
+msgstr "Conexoes"
+
+msgid "Connection Details"
+msgstr "Detalhes da Conexao"
+
+msgid "Select a connection or press Add to create one."
+msgstr "Selecione uma conexao ou pressione Adicionar para criar uma."
+
+msgid "Name"
+msgstr "Nome"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Username"
+msgstr "Usuario"
+
+msgid "Password"
+msgstr "Senha"
+
+msgid "Connect"
+msgstr "Conectar"
+
+msgid "Connection name"
+msgstr "Nome da conexao"
+
+msgid "Save"
+msgstr "Salvar"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Change Password"
+msgstr "Alterar Senha"
+
+msgid "Reset Vault"
+msgstr "Redefinir Cofre"
+
+msgid "Select a connection first"
+msgstr "Selecione uma conexao primeiro"
+
+msgid "Connection not found"
+msgstr "Conexao nao encontrada"
+
+msgid "Testing connection..."
+msgstr "Testando conexao..."
+
+msgid "Name is required"
+msgstr "O nome e obrigatorio"
+
+msgid "URL is required"
+msgstr "A URL e obrigatoria"
+
+msgid "Current password is wrong"
+msgstr "A senha atual esta incorreta"
+
+msgid "Master password changed successfully"
+msgstr "Senha mestra alterada com sucesso"
+
+msgid "Failed to change password"
+msgstr "Falha ao alterar senha"
+
+msgid "Vault reset. All connections removed."
+msgstr "Cofre redefinido. Todas as conexoes removidas."
+
+# Unlock screen
+msgid "Create Master Password"
+msgstr "Criar Senha Mestra"
+
+msgid "Set a master password to encrypt your\nGeoServer connection credentials."
+msgstr "Defina uma senha mestra para criptografar\nsuas credenciais de conexao GeoServer."
+
+msgid "Unlock Vault"
+msgstr "Desbloquear Cofre"
+
+msgid "Enter your master password to\ndecrypt connection credentials."
+msgstr "Digite sua senha mestra para\ndescriptografar as credenciais de conexao."
+
+msgid "Master password"
+msgstr "Senha mestra"
+
+msgid "Confirm password"
+msgstr "Confirmar senha"
+
+msgid "Unlock"
+msgstr "Desbloquear"
+
+msgid "Create"
+msgstr "Criar"
+
+msgid "Password cannot be empty"
+msgstr "A senha nao pode estar vazia"
+
+msgid "Password must be at least 8 characters"
+msgstr "A senha deve ter pelo menos 8 caracteres"
+
+msgid "Passwords do not match"
+msgstr "As senhas nao coincidem"
+
+msgid "Vault unlocked"
+msgstr "Cofre desbloqueado"
+
+msgid "Wrong password. Try again."
+msgstr "Senha incorreta. Tente novamente."
+
+msgid "Master password created. Credentials are now encrypted."
+msgstr "Senha mestra criada. As credenciais estao criptografadas."
+
+# Confirm screen
+msgid "Type '{}' to confirm:"
+msgstr "Digite '{}' para confirmar:"
+
+msgid "Close"
+msgstr "Fechar"
+
+msgid "Confirm Delete"
+msgstr "Confirmar Exclusao"
+
+# Context menu
+msgid "GeoServer Actions"
+msgstr "Acoes GeoServer"
+
+msgid "File Actions"
+msgstr "Acoes de Arquivo"
+
+msgid "Create Workspace"
+msgstr "Criar Espaco de Trabalho"
+
+msgid "Create Store"
+msgstr "Criar Armazem"
+
+msgid "Refresh Tree"
+msgstr "Atualizar Arvore"
+
+msgid "Open Reports Folder"
+msgstr "Abrir Pasta de Relatorios"
+
+# GeoServer tree
+msgid "Refresh"
+msgstr "Atualizar"
+
+msgid "GeoServer"
+msgstr "GeoServer"
+
+msgid "Vault is locked. Press F9 to unlock."
+msgstr "O cofre esta bloqueado. Pressione F9 para desbloquear."
+
+msgid "No connection active.\nPress F9 to configure connections."
+msgstr "Nenhuma conexao ativa.\nPressione F9 para configurar conexoes."
+
+msgid "Connect to a GeoServer first (F9)"
+msgstr "Conecte-se a um GeoServer primeiro (F9)"
+
+msgid "No connection active"
+msgstr "Nenhuma conexao ativa"
+
+msgid "Workspace Name"
+msgstr "Nome do Espaco de Trabalho"
+
+msgid "Select a workspace in the tree first"
+msgstr "Selecione um espaco de trabalho na arvore primeiro"
+
+msgid "Cannot read the local file pane"
+msgstr "Nao e possivel ler o painel de arquivos local"
+
+msgid "Selected path is not a directory"
+msgstr "O caminho selecionado nao e um diretorio"
+
+msgid "No spatial files found"
+msgstr "Nenhum arquivo espacial encontrado"
+
+msgid "Select a resource to delete"
+msgstr "Selecione um recurso para excluir"
+
+msgid "Cannot determine workspace"
+msgstr "Nao e possivel determinar o espaco de trabalho"
+
+msgid "Cannot delete this resource type"
+msgstr "Nao e possivel excluir este tipo de recurso"
+
+msgid "Delete not implemented for local files"
+msgstr "Exclusao nao implementada para arquivos locais"
+
+# File pane
+msgid "Select"
+msgstr "Selecionar"
+
+# Config errors
+msgid "Failed to load config: {error}"
+msgstr "Falha ao carregar configuracao: {error}"
+
+msgid "This will DELETE all saved connections.\nYou will need to set a new master password\nand re-enter all your connections.\n\nThis cannot be undone!"
+msgstr "Isso IRA EXCLUIR todas as conexoes salvas.\nVoce precisara definir uma nova senha mestra\ne reinserir todas as suas conexoes.\n\nEsta acao nao pode ser desfeita!"

@@ -2,12 +2,13 @@
 # Copyright (C) 2026 Kartoza (Pty) Ltd
 msgid ""
 msgstr ""
-"Project-Id-Version: geotui 0.1.0\n"
+"Project-Id-Version: geotui 1.0.0\n"
 "Language: es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+# App bindings
 msgid "Quit"
 msgstr "Salir"
 
@@ -38,9 +39,11 @@ msgstr "Configuracion"
 msgid "Language"
 msgstr "Idioma"
 
+# Status bar
 msgid "Ready"
 msgstr "Listo"
 
+# Help
 msgid "Help - Press F1 for assistance"
 msgstr "Ayuda - Presione F1 para asistencia"
 
@@ -50,6 +53,7 @@ msgstr "Ayuda GeoTUI"
 msgid "Create Directory"
 msgstr "Crear Directorio"
 
+# Pane labels
 msgid "Left"
 msgstr "Izquierda"
 
@@ -58,3 +62,211 @@ msgstr "Derecha"
 
 msgid "Files"
 msgstr "Archivos"
+
+# Settings screen
+msgid "Back"
+msgstr "Volver"
+
+msgid "Add"
+msgstr "Agregar"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Test"
+msgstr "Probar"
+
+msgid "Connections"
+msgstr "Conexiones"
+
+msgid "Connection Details"
+msgstr "Detalles de Conexion"
+
+msgid "Select a connection or press Add to create one."
+msgstr "Seleccione una conexion o presione Agregar para crear una."
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "Username"
+msgstr "Usuario"
+
+msgid "Password"
+msgstr "Contrasena"
+
+msgid "Connect"
+msgstr "Conectar"
+
+msgid "Connection name"
+msgstr "Nombre de conexion"
+
+msgid "Save"
+msgstr "Guardar"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Change Password"
+msgstr "Cambiar Contrasena"
+
+msgid "Reset Vault"
+msgstr "Restablecer Boveda"
+
+msgid "Select a connection first"
+msgstr "Seleccione una conexion primero"
+
+msgid "Connection not found"
+msgstr "Conexion no encontrada"
+
+msgid "Testing connection..."
+msgstr "Probando conexion..."
+
+msgid "Name is required"
+msgstr "El nombre es obligatorio"
+
+msgid "URL is required"
+msgstr "La URL es obligatoria"
+
+msgid "Current password is wrong"
+msgstr "La contrasena actual es incorrecta"
+
+msgid "Master password changed successfully"
+msgstr "Contrasena maestra cambiada exitosamente"
+
+msgid "Failed to change password"
+msgstr "Error al cambiar contrasena"
+
+msgid "Vault reset. All connections removed."
+msgstr "Boveda restablecida. Todas las conexiones eliminadas."
+
+# Unlock screen
+msgid "Create Master Password"
+msgstr "Crear Contrasena Maestra"
+
+msgid "Set a master password to encrypt your\nGeoServer connection credentials."
+msgstr "Establezca una contrasena maestra para cifrar\nsus credenciales de conexion GeoServer."
+
+msgid "Unlock Vault"
+msgstr "Desbloquear Boveda"
+
+msgid "Enter your master password to\ndecrypt connection credentials."
+msgstr "Ingrese su contrasena maestra para\ndescifrar las credenciales de conexion."
+
+msgid "Master password"
+msgstr "Contrasena maestra"
+
+msgid "Confirm password"
+msgstr "Confirmar contrasena"
+
+msgid "Unlock"
+msgstr "Desbloquear"
+
+msgid "Create"
+msgstr "Crear"
+
+msgid "Password cannot be empty"
+msgstr "La contrasena no puede estar vacia"
+
+msgid "Password must be at least 8 characters"
+msgstr "La contrasena debe tener al menos 8 caracteres"
+
+msgid "Passwords do not match"
+msgstr "Las contrasenas no coinciden"
+
+msgid "Vault unlocked"
+msgstr "Boveda desbloqueada"
+
+msgid "Wrong password. Try again."
+msgstr "Contrasena incorrecta. Intente de nuevo."
+
+msgid "Master password created. Credentials are now encrypted."
+msgstr "Contrasena maestra creada. Las credenciales estan cifradas."
+
+# Confirm screen
+msgid "Type '{}' to confirm:"
+msgstr "Escriba '{}' para confirmar:"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Confirm Delete"
+msgstr "Confirmar Eliminacion"
+
+# Context menu
+msgid "GeoServer Actions"
+msgstr "Acciones GeoServer"
+
+msgid "File Actions"
+msgstr "Acciones de Archivo"
+
+msgid "Create Workspace"
+msgstr "Crear Espacio de Trabajo"
+
+msgid "Create Store"
+msgstr "Crear Almacen"
+
+msgid "Refresh Tree"
+msgstr "Actualizar Arbol"
+
+msgid "Open Reports Folder"
+msgstr "Abrir Carpeta de Informes"
+
+# GeoServer tree
+msgid "Refresh"
+msgstr "Actualizar"
+
+msgid "GeoServer"
+msgstr "GeoServer"
+
+msgid "Vault is locked. Press F9 to unlock."
+msgstr "La boveda esta bloqueada. Presione F9 para desbloquear."
+
+msgid "No connection active.\nPress F9 to configure connections."
+msgstr "No hay conexion activa.\nPresione F9 para configurar conexiones."
+
+msgid "Connect to a GeoServer first (F9)"
+msgstr "Conectese a un GeoServer primero (F9)"
+
+msgid "No connection active"
+msgstr "No hay conexion activa"
+
+msgid "Workspace Name"
+msgstr "Nombre del Espacio de Trabajo"
+
+msgid "Select a workspace in the tree first"
+msgstr "Seleccione un espacio de trabajo en el arbol primero"
+
+msgid "Cannot read the local file pane"
+msgstr "No se puede leer el panel de archivos local"
+
+msgid "Selected path is not a directory"
+msgstr "La ruta seleccionada no es un directorio"
+
+msgid "No spatial files found"
+msgstr "No se encontraron archivos espaciales"
+
+msgid "Select a resource to delete"
+msgstr "Seleccione un recurso para eliminar"
+
+msgid "Cannot determine workspace"
+msgstr "No se puede determinar el espacio de trabajo"
+
+msgid "Cannot delete this resource type"
+msgstr "No se puede eliminar este tipo de recurso"
+
+msgid "Delete not implemented for local files"
+msgstr "Eliminar no implementado para archivos locales"
+
+# File pane
+msgid "Select"
+msgstr "Seleccionar"
+
+# Config errors
+msgid "Failed to load config: {error}"
+msgstr "Error al cargar configuracion: {error}"
+
+msgid "This will DELETE all saved connections.\nYou will need to set a new master password\nand re-enter all your connections.\n\nThis cannot be undone!"
+msgstr "Esto ELIMINARA todas las conexiones guardadas.\nNecesitara establecer una nueva contrasena maestra\ny volver a ingresar todas sus conexiones.\n\nEsta accion no se puede deshacer!"

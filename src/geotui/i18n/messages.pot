@@ -4,9 +4,9 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: geotui 0.1.0\n"
+"Project-Id-Version: geotui 1.0.0\n"
 "Report-Msgid-Bugs-To: info@kartoza.com\n"
-"POT-Creation-Date: 2026-05-19 00:00+0000\n"
+"POT-Creation-Date: 2026-05-22 00:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/geotui/app.py
+# App bindings
 msgid "Quit"
 msgstr ""
 
@@ -45,9 +45,11 @@ msgstr ""
 msgid "Language"
 msgstr ""
 
+# Status bar
 msgid "Ready"
 msgstr ""
 
+# Help
 msgid "Help - Press F1 for assistance"
 msgstr ""
 
@@ -57,6 +59,7 @@ msgstr ""
 msgid "Create Directory"
 msgstr ""
 
+# Pane labels
 msgid "Left"
 msgstr ""
 
@@ -64,4 +67,212 @@ msgid "Right"
 msgstr ""
 
 msgid "Files"
+msgstr ""
+
+# Settings screen
+msgid "Back"
+msgstr ""
+
+msgid "Add"
+msgstr ""
+
+msgid "Edit"
+msgstr ""
+
+msgid "Test"
+msgstr ""
+
+msgid "Connections"
+msgstr ""
+
+msgid "Connection Details"
+msgstr ""
+
+msgid "Select a connection or press Add to create one."
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "URL"
+msgstr ""
+
+msgid "Username"
+msgstr ""
+
+msgid "Password"
+msgstr ""
+
+msgid "Connect"
+msgstr ""
+
+msgid "Connection name"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Change Password"
+msgstr ""
+
+msgid "Reset Vault"
+msgstr ""
+
+msgid "Select a connection first"
+msgstr ""
+
+msgid "Connection not found"
+msgstr ""
+
+msgid "Testing connection..."
+msgstr ""
+
+msgid "Name is required"
+msgstr ""
+
+msgid "URL is required"
+msgstr ""
+
+msgid "Current password is wrong"
+msgstr ""
+
+msgid "Master password changed successfully"
+msgstr ""
+
+msgid "Failed to change password"
+msgstr ""
+
+msgid "Vault reset. All connections removed."
+msgstr ""
+
+# Unlock screen
+msgid "Create Master Password"
+msgstr ""
+
+msgid "Set a master password to encrypt your\nGeoServer connection credentials."
+msgstr ""
+
+msgid "Unlock Vault"
+msgstr ""
+
+msgid "Enter your master password to\ndecrypt connection credentials."
+msgstr ""
+
+msgid "Master password"
+msgstr ""
+
+msgid "Confirm password"
+msgstr ""
+
+msgid "Unlock"
+msgstr ""
+
+msgid "Create"
+msgstr ""
+
+msgid "Password cannot be empty"
+msgstr ""
+
+msgid "Password must be at least 8 characters"
+msgstr ""
+
+msgid "Passwords do not match"
+msgstr ""
+
+msgid "Vault unlocked"
+msgstr ""
+
+msgid "Wrong password. Try again."
+msgstr ""
+
+msgid "Master password created. Credentials are now encrypted."
+msgstr ""
+
+# Confirm screen
+msgid "Type '{}' to confirm:"
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "Confirm Delete"
+msgstr ""
+
+# Context menu
+msgid "GeoServer Actions"
+msgstr ""
+
+msgid "File Actions"
+msgstr ""
+
+msgid "Create Workspace"
+msgstr ""
+
+msgid "Create Store"
+msgstr ""
+
+msgid "Refresh Tree"
+msgstr ""
+
+msgid "Open Reports Folder"
+msgstr ""
+
+# GeoServer tree
+msgid "Refresh"
+msgstr ""
+
+msgid "GeoServer"
+msgstr ""
+
+msgid "Vault is locked. Press F9 to unlock."
+msgstr ""
+
+msgid "No connection active.\nPress F9 to configure connections."
+msgstr ""
+
+msgid "Connect to a GeoServer first (F9)"
+msgstr ""
+
+msgid "No connection active"
+msgstr ""
+
+msgid "Workspace Name"
+msgstr ""
+
+msgid "Select a workspace in the tree first"
+msgstr ""
+
+msgid "Cannot read the local file pane"
+msgstr ""
+
+msgid "Selected path is not a directory"
+msgstr ""
+
+msgid "No spatial files found"
+msgstr ""
+
+msgid "Select a resource to delete"
+msgstr ""
+
+msgid "Cannot determine workspace"
+msgstr ""
+
+msgid "Cannot delete this resource type"
+msgstr ""
+
+msgid "Delete not implemented for local files"
+msgstr ""
+
+# File pane
+msgid "Select"
+msgstr ""
+
+# Config errors
+msgid "Failed to load config: {error}"
+msgstr ""
+
+msgid "This will DELETE all saved connections.\nYou will need to set a new master password\nand re-enter all your connections.\n\nThis cannot be undone!"
 msgstr ""

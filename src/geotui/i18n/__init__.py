@@ -80,6 +80,35 @@ def _(message: str) -> str:
     return _translations.gettext(message)
 
 
-# Initialize from environment or default
-_env_lang = os.environ.get("GEOTUI_LANG", "en")[:2].lower()
-set_language(_env_lang)
+def _detect_language() -> str:
+    """Detect the best language from environment or system locale.
+
+    Priority: GEOTUI_LANG env var > system locale > English fallback.
+
+    Returns:
+        Two-letter language code.
+    """
+    # Explicit override takes priority
+    env_lang = os.environ.get("GEOTUI_LANG", "").strip()
+    if env_lang:
+        return env_lang[:2].lower()
+
+    # Fall back to system locale
+    import locale
+
+    try:
+        loc = locale.getlocale()[0] or ""
+    except (ValueError, locale.Error):
+        loc = ""
+    if not loc:
+        loc = os.environ.get("LANG", "")
+    # Extract language code (e.g. "pt_BR.UTF-8" -> "pt")
+    lang_code = loc.split("_")[0].split(".")[0].lower()
+    if lang_code in SUPPORTED_LANGUAGES:
+        return lang_code
+
+    return "en"
+
+
+# Initialize from env / system locale
+set_language(_detect_language())
