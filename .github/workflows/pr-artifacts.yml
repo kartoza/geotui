@@ -243,12 +243,12 @@ jobs:
 
           | Platform | Artifact |
           |----------|----------|
-          | Linux x86_64 | `geotui-linux-amd64` |
-          | macOS Intel | `geotui-macos-amd64` |
-          | macOS Apple Silicon | `geotui-macos-arm64` |
-          | Windows x86_64 | `geotui-windows-amd64.exe` |
-          | Python wheel/sdist | `geotui-*.whl` |
-          | SBOM (CycloneDX) | `sbom.json` |
+          | Linux x86_64 | `pr-geotui-linux-amd64` |
+          | macOS Intel | `pr-geotui-macos-amd64` |
+          | macOS Apple Silicon | `pr-geotui-macos-arm64` |
+          | Windows x86_64 | `pr-geotui-windows-amd64.exe` |
+          | Python wheel/sdist | `pr-python-dist` |
+          | SBOM (CycloneDX) | `pr-sbom` |
           MEOF
           echo "" >> artifacts-comment.md
           echo "> **[Download all artifacts from this workflow run](${RUN_URL}#artifacts)**" >> artifacts-comment.md
