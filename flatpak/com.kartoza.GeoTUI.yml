@@ -12,8 +12,7 @@ modules:
   - name: python3-geotui
     buildsystem: simple
     build-commands:
-      - pip3 install --no-build-isolation --prefix=/app hatchling
-      - pip3 install --no-build-isolation --prefix=/app .
+      - pip3 install --no-index --find-links=wheels --prefix=/app geotui
     sources:
       - type: dir
         path: ..

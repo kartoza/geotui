@@ -229,6 +229,14 @@ jobs:
           flatpak install --user -y \
             flathub org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pre-download wheels for offline install
+        run: |
+          pip install build && python -m build --wheel
+          mkdir -p wheels
+          pip download --dest wheels .
       - name: Build Flatpak bundle
         run: |
           VERSION=${GITHUB_REF_NAME#v}
