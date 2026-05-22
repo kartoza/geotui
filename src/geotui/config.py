@@ -10,6 +10,7 @@ import base64
 import json
 import os
 import secrets
+import sys
 import tempfile
 import threading
 import uuid
@@ -145,16 +146,19 @@ class AppConfig(BaseModel):
 
 
 def _get_config_dir() -> Path:
-    """Get XDG-compliant config directory.
+    """Get platform-appropriate config directory.
+
+    Uses %APPDATA% on Windows, XDG_CONFIG_HOME (or ~/.config) on Unix.
 
     Returns:
         Path to the configuration directory.
     """
-    xdg = os.environ.get("XDG_CONFIG_HOME", "")
-    if xdg:
-        base = Path(xdg)
+    if sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
     else:
-        base = Path.home() / ".config"
+        xdg = os.environ.get("XDG_CONFIG_HOME", "")
+        base = Path(xdg) if xdg else Path.home() / ".config"
     config_dir = base / "geotui"
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
@@ -184,6 +188,7 @@ class ConfigManager:
         """
         self._lock = threading.RLock()
         self._config_path = config_path or _get_config_path()
+        self.load_error: str | None = None
         self.config = self._load()
 
     def _load(self) -> AppConfig:
@@ -196,7 +201,8 @@ class ConfigManager:
             try:
                 data = json.loads(self._config_path.read_text(encoding="utf-8"))
                 return AppConfig.model_validate(data)
-            except (json.JSONDecodeError, ValueError):
+            except Exception as exc:
+                self.load_error = str(exc)
                 return AppConfig()
         return AppConfig()
 
