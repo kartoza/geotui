@@ -38,10 +38,12 @@ jobs:
         run: pip install -e ".[dev]" pyinstaller
       - name: Build standalone binary
         run: |
+          ADD_DATA_SEPARATOR=":"
+          if [ "${{ runner.os }}" = "Windows" ]; then ADD_DATA_SEPARATOR=";"; fi
           pyinstaller --onefile \
             --name geotui \
-            --add-data "src/geotui/styles:geotui/styles" \
-            --add-data "src/geotui/i18n:geotui/i18n" \
+            --add-data "src/geotui/styles${ADD_DATA_SEPARATOR}geotui/styles" \
+            --add-data "src/geotui/i18n${ADD_DATA_SEPARATOR}geotui/i18n" \
             src/geotui/__main__.py
         shell: bash
       - uses: actions/upload-artifact@v4
