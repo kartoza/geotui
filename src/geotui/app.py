@@ -104,9 +104,9 @@ class GeoTUIApp(App[None]):
         """After splash dismisses, show unlock if needed."""
         if self.config_manager.load_error:
             self.notify(
-                _(
-                    "Failed to load config: {error}"
-                ).format(error=self.config_manager.load_error),
+                _("Failed to load config: {error}").format(
+                    error=self.config_manager.load_error
+                ),
                 severity="error",
                 timeout=20,
             )
