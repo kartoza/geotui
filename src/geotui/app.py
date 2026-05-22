@@ -102,6 +102,14 @@ class GeoTUIApp(App[None]):
 
     def _after_splash(self, _result: None = None) -> None:
         """After splash dismisses, show unlock if needed."""
+        if self.config_manager.load_error:
+            self.notify(
+                _("Failed to load config: {error}").format(
+                    error=self.config_manager.load_error
+                ),
+                severity="error",
+                timeout=20,
+            )
         if self.config_manager.has_vault:
             self._show_unlock()
         elif self.config_manager.config.connections:
