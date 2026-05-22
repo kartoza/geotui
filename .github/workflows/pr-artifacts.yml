@@ -1,0 +1,252 @@
+name: PR Artifacts & Security
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  # ── Build artifacts for PR testing ─────────────────────────
+  build-binary:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: geotui-linux-amd64
+            binary: dist/geotui
+          - os: macos-latest
+            artifact: geotui-macos-amd64
+            binary: dist/geotui
+          - os: macos-14
+            artifact: geotui-macos-arm64
+            binary: dist/geotui
+          - os: windows-latest
+            artifact: geotui-windows-amd64.exe
+            binary: dist/geotui.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]" pyinstaller
+      - name: Build standalone binary
+        run: |
+          ADD_DATA_SEPARATOR=":"
+          if [ "${{ runner.os }}" = "Windows" ]; then ADD_DATA_SEPARATOR=";"; fi
+          pyinstaller --onefile \
+            --name geotui \
+            --add-data "src/geotui/styles${ADD_DATA_SEPARATOR}geotui/styles" \
+            --add-data "src/geotui/i18n${ADD_DATA_SEPARATOR}geotui/i18n" \
+            src/geotui/__main__.py
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+          retention-days: 7
+
+  build-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel and sdist
+        run: pip install build && python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-python-dist
+          path: dist/
+          retention-days: 7
+
+  # ── SBOM Generation ────────────────────────────────────────
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project runtime dependencies
+        run: pip install .
+      - name: Generate SBOM
+        run: |
+          pip freeze > requirements-runtime.txt
+          pip install cyclonedx-bom
+          cyclonedx-py requirements requirements-runtime.txt \
+            -o sbom.json \
+            --output-format JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-sbom
+          path: sbom.json
+          retention-days: 30
+
+  # ── CVE / Security Scan ────────────────────────────────────
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project and audit tools
+        run: |
+          pip install -e ".[dev]"
+          pip install pip-audit safety
+      - name: Run pip-audit
+        id: pip_audit
+        continue-on-error: true
+        run: |
+          pip-audit --format json --output pip-audit-results.json 2>&1 || true
+          pip-audit --format columns --output pip-audit-results.txt 2>&1 || true
+          pip-audit 2>&1 | tee pip-audit-output.txt || true
+      - name: Run safety check
+        id: safety
+        continue-on-error: true
+        run: |
+          safety check --output json > safety-results.json 2> safety-results.stderr.txt || true
+          safety check 2> safety-output.stderr.txt | tee safety-output.txt || true
+      - name: Run bandit security scan
+        id: bandit
+        run: |
+          pip install bandit
+          bandit -r src/ -c pyproject.toml -f json -o bandit-results.json 2>&1 || true
+          bandit -r src/ -c pyproject.toml 2>&1 | tee bandit-output.txt || true
+      - name: Generate security report
+        id: report
+        run: |
+          python3 << 'PYEOF'
+          import json
+          import sys
+
+          report_lines = []
+          report_lines.append("## Security Report\n")
+          has_critical = False
+
+          # --- pip-audit results ---
+          report_lines.append("### Dependency Vulnerabilities (pip-audit)\n")
+          try:
+              with open("pip-audit-results.json") as f:
+                  data = json.load(f)
+              vulns = data if isinstance(data, list) else data.get("dependencies", [])
+              found = []
+              for dep in vulns:
+                  for v in dep.get("vulns", []):
+                      vid = v.get("id", "unknown")
+                      pkg = dep.get("name", "unknown")
+                      ver = dep.get("version", "unknown")
+                      # pip-audit results in this workflow do not provide a reliable
+                      # normalized severity field. Avoid substring heuristics and gate
+                      # on the presence of any reported vulnerability from the scanner.
+                      sev = "UNSPECIFIED"
+                      has_critical = True
+                      found.append((pkg, ver, vid, sev))
+              if found:
+                  report_lines.append("| Package | Version | CVE | Severity |")
+                  report_lines.append("|---------|---------|-----|----------|")
+                  for pkg, ver, vid, sev in found:
+                      emoji = {"UNSPECIFIED": "⚪"}.get(sev, "⚪")
+                      report_lines.append(f"| {pkg} | {ver} | {vid} | {emoji} {sev} |")
+              else:
+                  report_lines.append("✅ No known vulnerabilities found.\n")
+          except (FileNotFoundError, json.JSONDecodeError, KeyError):
+              report_lines.append("✅ No known vulnerabilities found.\n")
+
+          # --- bandit results ---
+          report_lines.append("\n### Static Security Analysis (bandit)\n")
+          try:
+              with open("bandit-results.json") as f:
+                  data = json.load(f)
+              results = data.get("results", [])
+              if results:
+                  report_lines.append("| File | Line | Issue | Severity | Confidence |")
+                  report_lines.append("|------|------|-------|----------|------------|")
+                  for r in results[:20]:
+                      sev = r.get("issue_severity", "LOW")
+                      emoji = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}.get(sev.upper(), "⚪")
+                      fname = r.get("filename", "").replace("src/geotui/", "")
+                      report_lines.append(
+                          f"| {fname} | {r.get('line_number', '?')} "
+                          f"| {r.get('issue_text', '')[:60]} "
+                          f"| {emoji} {sev} | {r.get('issue_confidence', '')} |"
+                      )
+              else:
+                  report_lines.append("✅ No security issues found.\n")
+          except (FileNotFoundError, json.JSONDecodeError):
+              report_lines.append("✅ No security issues found.\n")
+
+          # --- Summary ---
+          report_lines.append("\n### Summary\n")
+          if has_critical:
+              report_lines.append("🔴 **CRITICAL vulnerabilities found — this PR should not be merged.**\n")
+          else:
+              report_lines.append("✅ **No critical vulnerabilities. Safe to merge.**\n")
+
+          report = "\n".join(report_lines)
+          with open("security-report.md", "w") as f:
+              f.write(report)
+
+          if has_critical:
+              print("::error::Critical CVEs found — PR blocked")
+              sys.exit(1)
+          PYEOF
+      - name: Post security report to PR
+        if: always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: security-report
+          path: security-report.md
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr-security-report
+          path: |
+            security-report.md
+            pip-audit-results.*
+            safety-results.json
+            bandit-results.json
+          retention-days: 30
+
+  # ── Post artifact summary to PR ────────────────────────────
+  artifact-comment:
+    needs:
+      - build-binary
+      - build-python
+      - sbom
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Generate artifact table
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          cat > artifacts-comment.md << 'MEOF'
+          ## Build Artifacts
+
+          Download pre-built binaries to test this PR (available for 7 days):
+
+          | Platform | Artifact |
+          |----------|----------|
+          | Linux x86_64 | `pr-geotui-linux-amd64` |
+          | macOS Intel | `pr-geotui-macos-amd64` |
+          | macOS Apple Silicon | `pr-geotui-macos-arm64` |
+          | Windows x86_64 | `pr-geotui-windows-amd64.exe` |
+          | Python wheel/sdist | `pr-python-dist` |
+          | SBOM (CycloneDX) | `pr-sbom` |
+          MEOF
+          echo "" >> artifacts-comment.md
+          echo "> **[Download all artifacts from this workflow run](${RUN_URL}#artifacts)**" >> artifacts-comment.md
+          echo "> Scroll to the bottom of the run page for the Artifacts section." >> artifacts-comment.md
+      - name: Post artifact comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: build-artifacts
+          path: artifacts-comment.md

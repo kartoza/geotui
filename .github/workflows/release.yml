@@ -258,6 +258,27 @@ jobs:
           name: geotui-snap
           path: ${{ steps.build.outputs.snap }}
 
+  # ── SBOM for release ─────────────────────────────────────
+  release-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project
+        run: pip install -e ".[dev]"
+      - name: Generate SBOM
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py environment \
+            -o geotui-sbom.json \
+            --output-format JSON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geotui-sbom
+          path: geotui-sbom.json
+
   # ── Publish to PyPI (disabled until trusted publisher configured) ──
   # To enable: configure a trusted publisher at https://pypi.org/manage/project/geotui/settings/publishing/
   # publish-pypi:
@@ -282,6 +303,7 @@ jobs:
       - build-appimage
       - build-snap
       - build-flatpak
+      - release-sbom
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -290,10 +312,78 @@ jobs:
           path: artifacts/
       - name: List artifacts
         run: find artifacts/ -type f | sort
+      - name: Generate release body
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          cat > release-body.md << 'EOF'
+          ## GeoTUI — GeoServer Manager
+
+          A beautiful Midnight Commander-style TUI for GeoServer management.
+          Made with love by [Kartoza](https://kartoza.com).
+
+          ### Installation
+
+          #### Linux
+
+          | Format | File | Install |
+          |--------|------|---------|
+          | **AppImage** | `GeoTUI-VERSION-x86_64.AppImage` | `chmod +x GeoTUI-*.AppImage && ./GeoTUI-*.AppImage` |
+          | **Debian/Ubuntu** | `geotui_VERSION_amd64.deb` | `sudo dpkg -i geotui_*.deb` |
+          | **Fedora/RHEL** | `geotui-VERSION-1.x86_64.rpm` | `sudo rpm -i geotui-*.rpm` |
+          | **Snap** | `geotui_VERSION_amd64.snap` | `sudo snap install --dangerous geotui_*.snap` |
+          | **Flatpak** | `GeoTUI-VERSION.flatpak` | `flatpak install GeoTUI-*.flatpak` |
+          | **Standalone** | `geotui-linux-amd64` | `chmod +x geotui-linux-amd64 && sudo cp geotui-linux-amd64 /usr/local/bin/geotui` |
+
+          #### macOS
+
+          | Architecture | File |
+          |-------------|------|
+          | **Intel (x86_64)** | `geotui-macos-amd64` |
+          | **Apple Silicon (M1/M2/M3)** | `geotui-macos-arm64` |
+
+          ```bash
+          chmod +x geotui-macos-*
+          sudo cp geotui-macos-* /usr/local/bin/geotui
+          ```
+
+          > **Gatekeeper:** Run `xattr -d com.apple.quarantine /usr/local/bin/geotui` or allow in System Settings > Privacy & Security.
+
+          #### Windows
+
+          Download `geotui-windows-amd64.exe` and move to a directory in your PATH.
+
+          > **SmartScreen:** Click "More info" → "Run anyway" on first launch.
+
+          #### Python (pip)
+
+          ```bash
+          pip install geotui
+          # or:
+          pipx install geotui
+          ```
+
+          ### Other Downloads
+
+          | File | Description |
+          |------|-------------|
+          | `geotui-VERSION.tar.gz` | Source distribution |
+          | `geotui-VERSION-py3-none-any.whl` | Python wheel |
+          | `geotui-sbom.json` | Software Bill of Materials (CycloneDX JSON) |
+
+          > **Unsigned packages:** .deb, .rpm, and .snap are not signed with a distribution key. For .snap use `--dangerous`. For .rpm with GPG checking: `sudo rpm -i --nosignature geotui-*.rpm`.
+
+          ---
+
+          **[Documentation](https://kartoza.github.io/geotui)** | **[Source](https://github.com/kartoza/geotui)** | **[Sponsor](https://github.com/sponsors/kartoza)**
+
+          Made with ❤️ by [Kartoza](https://kartoza.com)
+          EOF
+          # Replace VERSION placeholder
+          sed -i "s/VERSION/${VERSION}/g" release-body.md
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: release-body.md
           files: |
             artifacts/python-dist/*
             artifacts/geotui-linux-amd64/*
@@ -305,3 +395,4 @@ jobs:
             artifacts/geotui-appimage/*
             artifacts/geotui-snap/*
             artifacts/geotui-flatpak/*
+            artifacts/geotui-sbom/*
