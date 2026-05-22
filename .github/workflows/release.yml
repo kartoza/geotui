@@ -272,8 +272,8 @@ jobs:
         run: |
           pip install cyclonedx-bom
           cyclonedx-py environment \
-            --output geotui-sbom.json \
-            --format json
+            -o geotui-sbom.json \
+            --output-format JSON
       - uses: actions/upload-artifact@v4
         with:
           name: geotui-sbom
