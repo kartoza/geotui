@@ -13,6 +13,7 @@ jobs:
   # ── Build artifacts for PR testing ─────────────────────────
   build-binary:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
