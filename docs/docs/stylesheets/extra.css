@@ -1,6 +1,14 @@
-/* Kartoza Brand Colors */
+/* Kartoza Brand Colors
+ * Orange: #DF9E2F
+ * Blue:   #569FC6
+ * Teal:   #06969A
+ * Grey:   #8A8B8B
+ * Red:    #CC0403
+ * Dark:   #16213e
+ */
+
 :root {
-  --md-primary-fg-color: #569FC6;
+  --md-primary-fg-color: #16213e;
   --md-primary-fg-color--light: #569FC6;
   --md-primary-fg-color--dark: #0f3460;
   --md-accent-fg-color: #DF9E2F;
@@ -8,14 +16,53 @@
 }
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #0f3460;
+  --md-primary-fg-color: #16213e;
+  --md-primary-fg-color--light: #569FC6;
   --md-accent-fg-color: #DF9E2F;
+  --md-default-bg-color: #1a1a2e;
+}
+
+/* Header & footer: dark navy */
+.md-header {
+  background-color: #16213e;
 }
 
 .md-footer {
   background-color: #16213e;
 }
 
-.md-header {
-  background-color: #0f3460;
+/* Tabs: Kartoza orange active state */
+.md-tabs__link--active {
+  color: #DF9E2F !important;
+}
+
+/* Admonition accent for tips */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: #06969A;
+}
+
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: #06969A1a;
+}
+
+/* Links: Kartoza blue */
+.md-typeset a {
+  color: #569FC6;
+}
+
+.md-typeset a:hover {
+  color: #DF9E2F;
+}
+
+/* Navigation active item: orange */
+.md-nav__item--active > .md-nav__link {
+  color: #DF9E2F !important;
+}
+
+/* Images: subtle shadow and rounded corners */
+.md-typeset img {
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
