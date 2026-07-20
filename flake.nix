@@ -96,6 +96,8 @@
             pythonPkgs.pydantic-settings
             pythonPkgs.cryptography
             pythonPkgs.keyring
+            pythonPkgs.fpdf2
+            pythonPkgs.click
           ];
         };
 
