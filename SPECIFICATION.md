@@ -221,7 +221,9 @@ graph TB
 ### FR-008: F5 Copy-to-Publish
 - Midnight Commander F5 paradigm: select folder left, workspace/store right, F5
 - Multi-format discovery: Shapefile, GeoPackage (.gpkg), GeoTIFF (.tif/.tiff)
-- Auto-creates one store per format type (e.g. folder_shapefiles, folder_geotiff)
+- Vector formats auto-create one datastore per format type (e.g. folder_shapefiles);
+  GeoTIFF rasters auto-create one coverage store per file via the `file.geotiff`
+  REST endpoint
 - Concurrent upload bounded by configurable concurrency (default: 4)
 - Retry with exponential backoff on transient failures
 - Idempotent: create new layers or update existing ones
@@ -248,6 +250,7 @@ graph TB
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2.0 | 2026-07-22 | GeoTIFF publishing wired into F5 pipeline (per-file coverage stores) |
 | 0.6.0 | 2026-05-21 | Multi-connection tree, lazy loading, connection states |
 | 0.5.0 | 2026-05-21 | F5 copy-to-publish, multi-format support, replaces F2 bulk publish |
 | 0.4.0 | 2026-05-20 | Bulk shapefile publisher, PDF/JSON reports, CLI interface |

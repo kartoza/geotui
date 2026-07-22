@@ -181,6 +181,12 @@ class PublishConfig:
     source_directory: Path
     """Root directory to scan for shapefiles."""
 
+    format_type: str = "shapefile"
+    """Spatial format to publish: ``"shapefile"``, ``"geopackage"`` or
+    ``"geotiff"``.  Determines which discovery and upload path
+    :func:`run_publish` uses.  Defaults to ``"shapefile"`` for backwards
+    compatibility."""
+
     naming: NamingStrategy = NamingStrategy.BASENAME
     """Strategy for deriving layer names from shapefile stems."""
 
@@ -600,6 +606,10 @@ async def run_publish(
     """
     start = time.monotonic()
 
+    # Raster (coverage) formats use a separate discovery and upload path.
+    if config.format_type == "geotiff":
+        return await _run_publish_rasters(conn, config, progress_callback, start)
+
     # Discover bundles.
     bundles, disc_warnings = discover_bundles(
         config.source_directory, recurse=config.recurse
@@ -916,6 +926,321 @@ async def _upload_bundle(
             raise RuntimeError(
                 f"Upload failed for '{bundle.name}' and fail_fast is enabled: "
                 f"{last_error}"
+            )
+
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Raster (coverage) publish execution
+# ---------------------------------------------------------------------------
+
+
+def discover_rasters(
+    directory: Path,
+    *,
+    recurse: bool = False,
+) -> list[SpatialFile]:
+    """Scan *directory* for GeoTIFF rasters.
+
+    Parameters
+    ----------
+    directory:
+        Root directory to scan.
+    recurse:
+        When ``True``, descend into sub-directories.
+
+    Returns
+    -------
+    list[SpatialFile]
+        Discovered GeoTIFF files, sorted by path.
+    """
+    matches: list[Path] = []
+    for ext in sorted(_GEOTIFF_EXTENSIONS):
+        pattern = f"**/*{ext}" if recurse else f"*{ext}"
+        matches.extend(directory.glob(pattern))
+    return [SpatialFile.from_path(p) for p in sorted(set(matches))]
+
+
+def resolve_raster_names(
+    rasters: list[SpatialFile],
+    base_dir: Path,
+    strategy: NamingStrategy,
+    prefix: str = "",
+) -> dict[SpatialFile, str]:
+    """Derive a unique GeoServer coverage name for each raster.
+
+    Mirrors :func:`resolve_layer_names` but operates on :class:`SpatialFile`
+    instances.
+
+    Raises
+    ------
+    ValueError
+        If the chosen strategy would produce duplicate names (collision).
+    """
+    result: dict[SpatialFile, str] = {}
+
+    for raster in rasters:
+        if strategy is NamingStrategy.PREFIXED_BASENAME:
+            layer_name = f"{prefix}{raster.name}"
+        elif strategy is NamingStrategy.PATH_SLUG:
+            try:
+                rel = raster.path.parent.relative_to(base_dir)
+                parts = [*list(rel.parts), raster.name]
+            except ValueError:
+                parts = [raster.name]
+            slug_parts = [p for p in parts if p not in (".", "")]
+            layer_name = "_".join(slug_parts) if slug_parts else raster.name
+        else:  # BASENAME (and any unknown strategy)
+            layer_name = raster.name
+        result[raster] = layer_name
+
+    names = list(result.values())
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for name in names:
+        if name in seen:
+            duplicates.add(name)
+        seen.add(name)
+
+    if duplicates:
+        raise ValueError(
+            f"Coverage name collision detected with strategy '{strategy.value}': "
+            f"{sorted(duplicates)}.  Use NamingStrategy.PATH_SLUG or add a "
+            f"prefix to avoid duplicates."
+        )
+
+    return result
+
+
+async def _run_publish_rasters(
+    conn: Connection,
+    config: PublishConfig,
+    progress_callback: object,
+    start: float,
+) -> PublishReport:
+    """Execute a bulk GeoTIFF publish operation.
+
+    Discovers ``.tif`` / ``.tiff`` files under *config.source_directory*,
+    resolves coverage names, verifies the connection, then uploads each raster
+    to its own coverage store (a GeoTIFF store maps to a single file).
+
+    Args:
+        conn: GeoServer connection to target.
+        config: Publish configuration (``format_type`` must be ``"geotiff"``).
+        progress_callback: Optional ``(current, total, name)`` progress callable.
+        start: ``time.monotonic()`` timestamp captured by :func:`run_publish`.
+
+    Returns:
+        A :class:`PublishReport` summarising the outcome of every raster.
+    """
+    rasters = discover_rasters(config.source_directory, recurse=config.recurse)
+
+    try:
+        name_map = resolve_raster_names(
+            rasters, config.source_directory, config.naming, config.prefix
+        )
+    except ValueError as exc:
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            username=conn.username,
+            warnings=[str(exc)],
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    def _resolve_style(layer_name: str) -> str | None:
+        if layer_name in config.styles_mapping:
+            return config.styles_mapping[layer_name]
+        if config.styles_directory:
+            candidate = config.styles_directory / f"{layer_name}.sld"
+            if candidate.exists():
+                return layer_name
+        return None
+
+    # Dry-run: plan without touching GeoServer.
+    if config.dry_run:
+        results = [
+            BundleResult(
+                layer_name=layer_name,
+                source_path=raster.path,
+                action="create",
+                status="DRY_RUN",
+            )
+            for raster, layer_name in name_map.items()
+        ]
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            username=conn.username,
+            results=results,
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    # Verify connection before attempting any uploads.
+    conn_result = await test_connection(conn)
+    if not conn_result.success:
+        results = [
+            BundleResult(
+                layer_name=layer_name,
+                source_path=raster.path,
+                action="create",
+                status="error",
+                error=f"Connection failed: {conn_result.message}",
+            )
+            for raster, layer_name in name_map.items()
+        ]
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            username=conn.username,
+            results=results,
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    async with GeoServerClient(conn) as client:
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            geoserver_version=conn_result.version,
+            username=conn.username,
+        )
+
+        # Coverage stores are auto-created on upload; only the workspace needs
+        # to exist beforehand.
+        if not await _ensure_workspace(client, config, report):
+            report.wall_clock_seconds = time.monotonic() - start
+            return report
+
+        semaphore = asyncio.Semaphore(config.concurrency)
+        total = len(name_map)
+        tasks = [
+            _upload_raster(
+                client,
+                config,
+                raster,
+                layer_name,
+                _resolve_style(layer_name),
+                semaphore,
+                index,
+                total,
+                progress_callback,
+            )
+            for index, (raster, layer_name) in enumerate(name_map.items(), start=1)
+        ]
+
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for outcome in task_results:
+            if isinstance(outcome, RuntimeError):
+                # fail_fast raised - stop collecting remaining results.
+                break
+            if isinstance(outcome, BaseException):
+                logger.exception("Unexpected error in raster upload task: %s", outcome)
+            else:
+                report.results.append(outcome)
+
+    report.wall_clock_seconds = time.monotonic() - start
+    return report
+
+
+async def _upload_raster(
+    client: GeoServerClient,
+    config: PublishConfig,
+    raster: SpatialFile,
+    layer_name: str,
+    style: str | None,
+    semaphore: asyncio.Semaphore,
+    index: int,
+    total: int,
+    progress_callback: object,
+) -> BundleResult:
+    """Upload a single GeoTIFF raster to GeoServer with retry logic.
+
+    Each raster is uploaded to its own coverage store named *layer_name*; the
+    ``file.geotiff`` endpoint auto-creates the store and configures the
+    coverage.
+
+    Args:
+        client: Connected GeoServerClient.
+        config: Publish configuration.
+        raster: The GeoTIFF file to upload.
+        layer_name: Resolved GeoServer coverage/store name.
+        style: Style name to assign after upload, or ``None``.
+        semaphore: Concurrency limiter.
+        index: 1-based position of this raster in the batch (for progress).
+        total: Total number of rasters in the batch.
+        progress_callback: Optional progress callable.
+
+    Returns:
+        :class:`BundleResult` describing the outcome.
+
+    Raises:
+        RuntimeError: If *config.fail_fast* is ``True`` and the upload fails.
+    """
+    async with semaphore:
+        if callable(progress_callback):
+            progress_callback(index, total, raster.name)
+
+        exists = await client.layer_exists(config.workspace, layer_name)
+        action = "update" if exists else "create"
+
+        last_error: str = ""
+        for attempt in range(config.retry_max_attempts):
+            try:
+                t0 = time.monotonic()
+                data = raster.path.read_bytes()
+                success = await client.upload_geotiff(
+                    config.workspace, layer_name, data, update=exists
+                )
+                elapsed = time.monotonic() - t0
+
+                if success:
+                    if style:
+                        await client.assign_style(config.workspace, layer_name, style)
+                    return BundleResult(
+                        layer_name=layer_name,
+                        source_path=raster.path,
+                        action=action,
+                        status="ok",
+                        file_size=len(data),
+                        upload_time=elapsed,
+                    )
+
+                last_error = (
+                    f"HTTP {client._last_status_code}: "
+                    f"{client._last_response_text[:200]}"
+                )
+
+            except Exception as exc:
+                last_error = str(exc)
+                logger.warning(
+                    "Attempt %d/%d failed for raster '%s': %s",
+                    attempt + 1,
+                    config.retry_max_attempts,
+                    raster.name,
+                    last_error,
+                )
+
+            if attempt < config.retry_max_attempts - 1:
+                backoff = config.retry_backoff_seconds * (2**attempt)
+                await asyncio.sleep(backoff)
+
+        result = BundleResult(
+            layer_name=layer_name,
+            source_path=raster.path,
+            action=action,
+            status="error",
+            error=last_error,
+        )
+
+        if config.fail_fast:
+            raise RuntimeError(
+                f"Upload failed for raster '{raster.name}' and fail_fast is "
+                f"enabled: {last_error}"
             )
 
         return result

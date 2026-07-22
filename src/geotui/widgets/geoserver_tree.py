@@ -870,6 +870,7 @@ class GeoServerTree(Widget):
                 workspace=workspace,
                 datastore=store_name,
                 source_directory=source_dir,
+                format_type=group.format_type,
                 naming=NamingStrategy.BASENAME,
                 concurrency=4,
             )
