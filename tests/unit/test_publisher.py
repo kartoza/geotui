@@ -163,6 +163,61 @@ class TestPublishRunner:
         assert len(report.results) == 0
 
 
+class TestExplicitSourceFiles:
+    """PublishConfig.source_files restricts publishing to specific files."""
+
+    def test_build_shapefile_bundles_includes_companions(
+        self, shapefile_dir: Path
+    ) -> None:
+        from geotui.publisher import build_shapefile_bundles
+
+        # Pass only the .shp; companions on disk should be picked up.
+        bundles, _warnings = build_shapefile_bundles([shapefile_dir / "roads.shp"])
+        assert len(bundles) == 1
+        assert bundles[0].name == "roads"
+        exts = {p.suffix for p in bundles[0].files}
+        assert ".dbf" in exts and ".shx" in exts
+
+    @pytest.mark.asyncio
+    async def test_shapefile_source_files_restricts(self, shapefile_dir: Path) -> None:
+        """Only the selected shapefile is published, not the whole folder."""
+        from geotui.config import Connection
+        from geotui.publisher import run_publish
+
+        conn = Connection(name="T", url="https://192.0.2.1:9999")
+        cfg = PublishConfig(
+            workspace="ws",
+            datastore="ds",
+            source_directory=shapefile_dir,
+            source_files=[shapefile_dir / "roads.shp"],
+            dry_run=True,
+        )
+        report = await run_publish(conn, cfg)
+        dry = [r for r in report.results if r.status == "DRY_RUN"]
+        assert [r.layer_name for r in dry] == ["roads"]
+
+    @pytest.mark.asyncio
+    async def test_geotiff_source_files_restricts(self, tmp_path: Path) -> None:
+        """Only the selected GeoTIFF is published, not every tif in the folder."""
+        from geotui.config import Connection
+        from geotui.publisher import run_publish
+
+        (tmp_path / "dem.tif").write_bytes(b"II*\x00")
+        (tmp_path / "other.tif").write_bytes(b"II*\x00")
+        conn = Connection(name="T", url="https://192.0.2.1:9999")
+        cfg = PublishConfig(
+            workspace="ws",
+            datastore="ds",
+            source_directory=tmp_path,
+            source_files=[tmp_path / "dem.tif"],
+            format_type="geotiff",
+            dry_run=True,
+        )
+        report = await run_publish(conn, cfg)
+        names = [r.layer_name for r in report.results if r.status == "DRY_RUN"]
+        assert names == ["dem"]
+
+
 @pytest.fixture
 def raster_dir(tmp_path: Path) -> Path:
     """Create a directory with test GeoTIFF rasters."""

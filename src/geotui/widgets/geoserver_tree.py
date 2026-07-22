@@ -795,17 +795,35 @@ class GeoServerTree(Widget):
             )
             return
 
-        # Use Ctrl+T selected files if any, otherwise scan directory.
+        # Determine what to publish:
+        #  * Space/Ctrl+T tagged files  -> publish exactly that selection
+        #  * cursor on a folder         -> publish every dataset inside it
+        #  * cursor on a single file    -> publish just that dataset
         if selected_files:
             groups, warnings = discover_spatial_files_from_paths(selected_files)
         else:
-            if not source_dir.is_dir():
+            from geotui.widgets.file_pane import (
+                find_shapefile_companions,
+                is_shapefile_component,
+            )
+
+            target = file_pane.get_cursor_target()
+            if target is None:
                 self.app.notify(
-                    _("Selected path is not a directory"),
+                    _("Select a file or folder to publish"),
                     severity="warning",
                 )
                 return
-            groups, warnings = discover_spatial_files(source_dir)
+            if target.is_dir():
+                source_dir = target
+                groups, warnings = discover_spatial_files(target)
+            else:
+                if is_shapefile_component(target):
+                    paths = find_shapefile_companions(target)
+                else:
+                    paths = [target]
+                source_dir = target.parent
+                groups, warnings = discover_spatial_files_from_paths(paths)
 
         if not groups:
             self.app.notify(
@@ -878,10 +896,22 @@ class GeoServerTree(Widget):
         for idx, group in enumerate(groups, start=1):
             store_name = f"{source_dir.name}_{group.format_type}"
 
+            # Publish exactly the files in this group (never re-scan the whole
+            # directory), so a single highlighted file or a tagged selection
+            # uploads only those datasets.
+            group_files: list[Path] = []
+            for f in group.files:
+                bundle_files = getattr(f, "files", None)
+                if bundle_files is not None:  # ShapefileBundle
+                    group_files.extend(bundle_files)
+                else:  # SpatialFile
+                    group_files.append(f.path)
+
             config = PublishConfig(
                 workspace=workspace,
                 datastore=store_name,
                 source_directory=source_dir,
+                source_files=group_files,
                 format_type=group.format_type,
                 vrt_mode=vrt_mode,
                 naming=NamingStrategy.BASENAME,

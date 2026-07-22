@@ -180,7 +180,14 @@ class PublishConfig:
     """Target GeoServer datastore within *workspace*."""
 
     source_directory: Path
-    """Root directory to scan for shapefiles."""
+    """Root directory to scan for shapefiles (used when *source_files* is
+    ``None``, and for store naming / reports)."""
+
+    source_files: list[Path] | None = None
+    """Explicit set of files to publish. When provided, the engine publishes
+    exactly these (of the configured *format_type*) instead of re-scanning
+    *source_directory*.  This lets the UI publish a single highlighted file or
+    a non-contiguous selection rather than the whole folder."""
 
     format_type: str = "shapefile"
     """Spatial format to publish: ``"shapefile"``, ``"geopackage"``,
@@ -334,6 +341,52 @@ def discover_bundles(
     return bundles, warnings
 
 
+def build_shapefile_bundles(
+    paths: list[Path],
+) -> tuple[list[ShapefileBundle], list[str]]:
+    """Group explicit paths into shapefile bundles by (directory, stem).
+
+    Companion files present on disk for a stem are included automatically even
+    if only one component (e.g. the ``.shp``) was passed in. Bundles missing a
+    required sidecar produce a warning and are skipped.
+
+    Args:
+        paths: Explicit component paths to group.
+
+    Returns:
+        A ``(bundles, warnings)`` pair.
+    """
+    warnings: list[str] = []
+    bundles: list[ShapefileBundle] = []
+    seen: set[tuple[Path, str]] = set()
+    keys: list[tuple[Path, str]] = []
+    for p in paths:
+        if p.suffix.lower() in SHAPEFILE_ALL:
+            key = (p.parent, p.stem)
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
+
+    for parent, stem in sorted(keys):
+        missing = [
+            ext
+            for ext in sorted(SHAPEFILE_REQUIRED)
+            if not (parent / f"{stem}{ext}").exists()
+        ]
+        if missing:
+            warnings.append(f"Incomplete bundle '{stem}': missing {', '.join(missing)}")
+            continue
+        components = [
+            parent / f"{stem}{ext}"
+            for ext in sorted(SHAPEFILE_ALL)
+            if (parent / f"{stem}{ext}").exists()
+        ]
+        bundles.append(
+            ShapefileBundle(name=stem, directory=parent, files=tuple(components))
+        )
+    return bundles, warnings
+
+
 # ---------------------------------------------------------------------------
 # Multi-format discovery constants
 # ---------------------------------------------------------------------------
@@ -454,7 +507,7 @@ def discover_spatial_files_from_paths(
     warnings: list[str] = []
 
     # Classify files by format
-    shp_stems: dict[str, dict[str, Path]] = {}  # stem -> {ext: path}
+    shp_paths: list[Path] = []
     gpkg_files: list[Path] = []
     tif_files: list[Path] = []
     vrt_files: list[Path] = []
@@ -464,8 +517,7 @@ def discover_spatial_files_from_paths(
             continue
         suffix = path.suffix.lower()
         if suffix in SHAPEFILE_ALL:
-            stem = path.stem
-            shp_stems.setdefault(stem, {})[suffix] = path
+            shp_paths.append(path)
         elif suffix == ".gpkg":
             gpkg_files.append(path)
         elif suffix in _GEOTIFF_EXTENSIONS:
@@ -474,22 +526,8 @@ def discover_spatial_files_from_paths(
             vrt_files.append(path)
 
     # --- Shapefiles ---------------------------------------------------------
-    shp_bundles: list[ShapefileBundle] = []
-    for stem, ext_map in sorted(shp_stems.items()):
-        # Check required files exist
-        missing = [ext for ext in sorted(SHAPEFILE_REQUIRED) if ext not in ext_map]
-        if missing:
-            warnings.append(f"Incomplete bundle '{stem}': missing {', '.join(missing)}")
-            continue
-        component_files = sorted(ext_map.values(), key=lambda p: p.suffix)
-        directory = component_files[0].parent
-        shp_bundles.append(
-            ShapefileBundle(
-                name=stem,
-                directory=directory,
-                files=tuple(component_files),
-            )
-        )
+    shp_bundles, shp_warnings = build_shapefile_bundles(shp_paths)
+    warnings.extend(shp_warnings)
 
     if shp_bundles:
         store_type, category = _FORMAT_STORE_MAP["shapefile"]
@@ -652,10 +690,14 @@ async def run_publish(
     if config.format_type == "vrt":
         return await _run_publish_vrt(conn, config, progress_callback, start)
 
-    # Discover bundles.
-    bundles, disc_warnings = discover_bundles(
-        config.source_directory, recurse=config.recurse
-    )
+    # Discover bundles — from an explicit file list if provided, else by
+    # scanning the source directory.
+    if config.source_files is not None:
+        bundles, disc_warnings = build_shapefile_bundles(config.source_files)
+    else:
+        bundles, disc_warnings = discover_bundles(
+            config.source_directory, recurse=config.recurse
+        )
 
     # Resolve layer names (may raise ValueError on collision).
     try:
@@ -1076,7 +1118,14 @@ async def _run_publish_rasters(
     Returns:
         A :class:`PublishReport` summarising the outcome of every raster.
     """
-    rasters = discover_rasters(config.source_directory, recurse=config.recurse)
+    if config.source_files is not None:
+        rasters = [
+            SpatialFile.from_path(p)
+            for p in config.source_files
+            if p.suffix.lower() in _GEOTIFF_EXTENSIONS and p.is_file()
+        ]
+    else:
+        rasters = discover_rasters(config.source_directory, recurse=config.recurse)
 
     try:
         name_map = resolve_raster_names(
@@ -1337,7 +1386,14 @@ async def _run_publish_vrt(
     the referenced sources via the Resource API; "server_path" points the store
     at data already on the server).
     """
-    vrts = discover_vrts(config.source_directory, recurse=config.recurse)
+    if config.source_files is not None:
+        vrts = [
+            SpatialFile.from_path(p)
+            for p in config.source_files
+            if p.suffix.lower() in _VRT_EXTENSIONS and p.is_file()
+        ]
+    else:
+        vrts = discover_vrts(config.source_directory, recurse=config.recurse)
     entries, warnings = _parse_vrt_entries(vrts)
 
     if config.dry_run:

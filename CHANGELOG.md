@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.0] - 2026-07-22
 
 ### Changed
+- **F5 publish selection is precise.** F5 on a highlighted **file** publishes
+  only that dataset (shapefile companions included); F5 on a highlighted
+  **folder** publishes every valid dataset inside it. Press **Space** to
+  tag/untag files for a non-contiguous multi-file publish. The publish engine
+  now honours an explicit file list (`PublishConfig.source_files`) instead of
+  re-scanning the whole directory, so it never uploads more than what you
+  selected.
 - **Connection edit form UX.** The Save/Cancel action bar is now pinned to the
   bottom of the detail panel and always visible (the fields scroll above it),
   so the apply action is no longer clipped off-screen on short terminals. Added
