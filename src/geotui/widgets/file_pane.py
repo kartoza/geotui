@@ -60,6 +60,8 @@ class MCDirectoryTree(DirectoryTree):
 
     BINDINGS = [
         Binding("space", "tag_cursor", _("Select"), show=False),
+        Binding("right", "expand_cursor", _("Expand"), show=False),
+        Binding("left", "collapse_cursor", _("Collapse"), show=False),
     ]
 
     def __init__(
@@ -126,6 +128,26 @@ class MCDirectoryTree(DirectoryTree):
         self.toggle_select_cursor()
         self.action_cursor_down()
         self.post_message(self.SelectionChanged())
+
+    def action_expand_cursor(self) -> None:
+        """Right arrow: expand the folder under the cursor in place."""
+        node = self.cursor_node
+        if node is not None and node.allow_expand and not node.is_expanded:
+            node.expand()
+
+    def action_collapse_cursor(self) -> None:
+        """Left arrow: collapse the folder under the cursor.
+
+        If the node is already collapsed (or a file), move the cursor to its
+        parent folder — the familiar file-manager "out" motion.
+        """
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.allow_expand and node.is_expanded:
+            node.collapse()
+        elif node.parent is not None and node.parent is not self.root:
+            self.move_cursor(node.parent)
 
     def clear_selection(self) -> None:
         """Clear all selected files."""

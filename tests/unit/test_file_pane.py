@@ -97,3 +97,43 @@ class TestCursorTargetAndSelection:
             await pilot.press("space")
             await pilot.pause()
             assert f in pane.get_selected_files()
+
+
+class TestArrowExpandCollapse:
+    """Right arrow expands a folder in place; left collapses it."""
+
+    @pytest.mark.asyncio
+    async def test_right_expands_left_collapses(
+        self, config_manager: ConfigManager, tmp_path: Path
+    ) -> None:
+        from geotui.widgets.file_pane import MCDirectoryTree
+
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (sub / "child.tif").write_bytes(b"II*\x00")
+
+        app = GeoTUIApp(config_manager=config_manager)
+        async with app.run_test() as pilot:
+            pane = pilot.app.query_one("#left-pane", FilePane)
+            tree = pane.query_one(MCDirectoryTree)
+            tree.focus()
+            pane.navigate_to(tmp_path)
+            await pilot.pause()
+
+            # Move onto the "sub" folder node.
+            for _ in range(12):
+                if pane.get_cursor_target() == sub:
+                    break
+                await pilot.press("down")
+                await pilot.pause()
+            assert pane.get_cursor_target() == sub
+
+            node = tree.cursor_node
+            assert node.allow_expand
+            await pilot.press("right")
+            await pilot.pause()
+            assert node.is_expanded is True
+
+            await pilot.press("left")
+            await pilot.pause()
+            assert node.is_expanded is False
