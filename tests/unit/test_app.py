@@ -67,3 +67,80 @@ class TestGeoTUIApp:
         """Test that pressing q exits the app."""
         async with GeoTUIApp().run_test() as pilot:
             await pilot.press("q")
+
+
+class TestVaultUnlockPrompt:
+    """Regression tests for the master-password re-prompt loop."""
+
+    @pytest.mark.asyncio
+    async def test_locked_decrypt_shows_single_unlock(self, tmp_path) -> None:
+        """Decrypting many connections while locked shows ONE unlock prompt.
+
+        Previously each connection triggered its own UnlockScreen, stacking
+        several identical prompts that felt like the password was being
+        rejected in a loop.
+        """
+        from geotui.config import ConfigManager, Connection
+        from geotui.screens.unlock import UnlockScreen
+
+        cm = ConfigManager(config_path=tmp_path / "config.json")
+        cm.init_vault("masterpassword")
+        vk = cm.unlock("masterpassword")
+        for name in ("A", "B", "C"):
+            cm.add_connection(
+                Connection(
+                    name=name,
+                    url="http://gs",
+                    username="u",
+                    password=cm.encrypt_password("s", vk),
+                )
+            )
+
+        app = GeoTUIApp(config_manager=cm)
+        async with app.run_test() as pilot:
+            app.vault_key = None  # vault locked
+            for conn in cm.config.connections:
+                app.decrypt_connection(conn)
+            await pilot.pause()
+
+            stack = [type(s).__name__ for s in app.screen_stack]
+            assert stack.count("UnlockScreen") == 1
+            assert isinstance(app.screen, UnlockScreen)
+
+    @pytest.mark.asyncio
+    async def test_unlock_clears_guard_for_retry(self, tmp_path) -> None:
+        """A successful unlock clears the guard so a later lock re-prompts."""
+        from geotui.config import ConfigManager, Connection
+
+        cm = ConfigManager(config_path=tmp_path / "config.json")
+        cm.init_vault("masterpassword")
+        vk = cm.unlock("masterpassword")
+        cm.add_connection(
+            Connection(
+                name="A",
+                url="http://gs",
+                username="u",
+                password=cm.encrypt_password("s", vk),
+            )
+        )
+
+        app = GeoTUIApp(config_manager=cm)
+        async with app.run_test() as pilot:
+            app.vault_key = None
+            app.decrypt_connection(cm.config.connections[0])
+            await pilot.pause()
+            assert app._unlock_active is True
+
+            # Simulate a completed unlock cycle: the screen is dismissed and
+            # the guard is cleared (as handle_unlock does on success).
+            app._unlock_active = False
+            app.vault_key = cm.unlock("masterpassword")
+            await app.pop_screen()
+            await pilot.pause()
+
+            # A later lock should be able to prompt again (exactly once).
+            app.vault_key = None
+            app.decrypt_connection(cm.config.connections[0])
+            await pilot.pause()
+            stack = [type(s).__name__ for s in app.screen_stack]
+            assert stack.count("UnlockScreen") == 1

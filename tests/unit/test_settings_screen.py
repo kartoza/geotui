@@ -52,6 +52,46 @@ class TestSettingsScreen:
             assert isinstance(app.screen, SettingsScreen)
 
     @pytest.mark.asyncio
+    async def test_save_refused_when_vault_locked(self, tmp_path: Path) -> None:
+        """Saving credentials while the vault is locked is refused.
+
+        Storing while locked would either leak the password in plaintext or
+        double-encrypt an existing token. The connection must be left
+        unchanged.
+        """
+        cm = ConfigManager(config_path=tmp_path / "config.json")
+        cm.init_vault("masterpassword")
+        vk = cm.unlock("masterpassword")
+        original = cm.encrypt_password("orig-secret", vk)
+        cm.add_connection(
+            Connection(
+                name="Prod",
+                url="http://gs",
+                username="admin",
+                password=original,
+            )
+        )
+        cid = cm.config.connections[0].id
+
+        app = GeoTUIApp(config_manager=cm)
+        async with app.run_test() as pilot:
+            app.vault_key = None  # vault locked
+            await pilot.press("f9")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, SettingsScreen)
+
+            screen.selected_id = cid
+            screen.query_one("#input-name", Input).value = "Prod"
+            screen.query_one("#input-url", Input).value = "http://gs"
+            screen.query_one("#input-password", Input).value = "attempt"
+            screen._save_form()
+            await pilot.pause()
+
+            # Password unchanged; nothing stored in plaintext.
+            assert cm.get_connection(cid).password == original
+
+    @pytest.mark.asyncio
     async def test_settings_shows_empty_state(
         self, config_manager: ConfigManager
     ) -> None:
@@ -272,6 +312,66 @@ class TestSettingsScreen:
             updated = populated_config.get_connection(conn.id)
             assert updated is not None
             assert updated.name == "Updated Name"
+
+    @pytest.mark.asyncio
+    async def test_edit_mode_hides_vault_buttons_and_shows_save(
+        self, populated_config: ConfigManager
+    ) -> None:
+        """In edit mode the Save action bar shows and vault buttons hide.
+
+        Regression: the master-vault "Change Master Password" button used to
+        sit at the docked bottom of the screen where users looked for Apply,
+        while the real Save button scrolled out of view.
+        """
+        from textual.widgets import Button
+
+        app = GeoTUIApp(config_manager=populated_config)
+        conn = populated_config.config.connections[0]
+        async with app.run_test() as pilot:
+            await pilot.press("f9")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, SettingsScreen)
+            screen.selected_id = conn.id
+            screen.action_edit()
+            await pilot.pause()
+
+            # Vault (master-password) controls are hidden while editing.
+            assert screen.query_one("#vault-buttons").display is False
+            # The save action bar and its buttons exist and are displayed.
+            save_btn = screen.query_one("#btn-save", Button)
+            assert save_btn.display is True
+            assert screen.query_one("#btn-save-connect", Button) is not None
+            # The action bar is a sibling of the scrolling field area, so it is
+            # not inside the scroll region that clipped the old Save button.
+            assert save_btn.parent.id == "edit-buttons"
+
+    @pytest.mark.asyncio
+    async def test_save_and_connect_persists_then_tests(
+        self, populated_config: ConfigManager
+    ) -> None:
+        """The Save & Connect button saves the form and triggers a test."""
+        from types import SimpleNamespace
+
+        app = GeoTUIApp(config_manager=populated_config)
+        conn = populated_config.config.connections[0]
+        called: list[str] = []
+        async with app.run_test() as pilot:
+            await pilot.press("f9")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, SettingsScreen)
+            screen.action_test_connection = lambda: called.append("test")  # type: ignore[method-assign]
+            screen.selected_id = conn.id
+            screen.action_edit()
+            await pilot.pause()
+            screen.query_one("#input-name", Input).value = "Renamed"
+            screen.on_button_pressed(
+                SimpleNamespace(button=SimpleNamespace(id="btn-save-connect"))
+            )
+            await pilot.pause()
+            assert populated_config.get_connection(conn.id).name == "Renamed"
+            assert called == ["test"]
 
     @pytest.mark.asyncio
     async def test_test_connection_without_selection(

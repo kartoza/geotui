@@ -96,6 +96,9 @@ class GeoTUIApp(App[None]):
         super().__init__()
         self.config_manager = config_manager or ConfigManager()
         self.vault_key: Fernet | None = None
+        # Guard against stacking multiple unlock prompts when several
+        # connections are decrypted while the vault is locked.
+        self._unlock_active: bool = False
         self._setup_logging()
 
     @staticmethod
@@ -174,12 +177,24 @@ class GeoTUIApp(App[None]):
             self._show_vault_setup()
 
     def _show_unlock(self) -> None:
-        """Show the unlock screen for existing vault."""
+        """Show the unlock screen for existing vault.
+
+        Idempotent: if an unlock prompt is already showing, this is a no-op.
+        ``decrypt_connection`` may be called once per connection while the
+        vault is locked, so without this guard each call would stack another
+        identical prompt, giving the impression that the master password is
+        being rejected in a loop.
+        """
         from geotui.screens.unlock import UnlockScreen
+
+        if self._unlock_active:
+            return
+        self._unlock_active = True
 
         def handle_unlock(password: str | None) -> None:
             if password is None:
                 # User chose to reset vault
+                self._unlock_active = False
                 self.config_manager.reset_vault()
                 self.notify(
                     _("Vault reset. All connections removed."),
@@ -190,6 +205,7 @@ class GeoTUIApp(App[None]):
                 return
             fernet = self.config_manager.unlock(password)
             if fernet:
+                self._unlock_active = False
                 self.vault_key = fernet
                 self.notify(_("Vault unlocked"), severity="information")
                 # Refresh tree now that credentials can be decrypted
@@ -200,6 +216,8 @@ class GeoTUIApp(App[None]):
                     severity="error",
                     timeout=5,
                 )
+                # Allow the prompt to be shown again for another attempt.
+                self._unlock_active = False
                 self._show_unlock()
 
         self.push_screen(UnlockScreen(is_setup=False), callback=handle_unlock)
