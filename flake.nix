@@ -26,6 +26,7 @@
             pythonPkgs.pydantic-settings
             pythonPkgs.cryptography
             pythonPkgs.keyring
+            pythonPkgs.defusedxml
             pythonPkgs.pytest
             pythonPkgs.pytest-asyncio
             pythonPkgs.pytest-cov
@@ -82,7 +83,7 @@
 
         packages.default = pythonPkgs.buildPythonPackage {
           pname = "geotui";
-          version = "1.1.0";
+          version = "1.2.0";
           src = ./.;
           format = "pyproject";
 
@@ -96,6 +97,7 @@
             pythonPkgs.pydantic-settings
             pythonPkgs.cryptography
             pythonPkgs.keyring
+            pythonPkgs.defusedxml
             pythonPkgs.fpdf2
             pythonPkgs.click
           ];

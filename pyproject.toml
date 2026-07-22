@@ -38,6 +38,7 @@ dependencies = [
     "keyring>=25.0.0",
     "fpdf2>=2.8.0",
     "click>=8.0.0",
+    "defusedxml>=0.7.0",
 ]
 
 [project.optional-dependencies]

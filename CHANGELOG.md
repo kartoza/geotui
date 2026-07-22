@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "✗ Connection failed" message.
 
 ### Added
+- **VRT (GDAL/OGR Virtual Format) publishing via F5.** GeoTUI discovers
+  `.vrt` files, parses them (with `defusedxml`, hardened against XXE/entity
+  attacks) to classify raster (`<VRTDataset>` → coverage store) vs vector
+  (`<OGRVRTDataSource>` → OGR datastore) and enumerate referenced sources. On
+  publish it prompts whether to **bundle & upload** the `.vrt` plus its
+  referenced files into the GeoServer data directory (via the Resource API) or
+  point the store at data already on the **server filesystem**. GeoServer is
+  probed for the GDAL / OGR extensions and warns if the required one is
+  missing. New dependency: `defusedxml`.
 - **GeoTIFF publishing** — the F5 copy-to-publish pipeline now uploads
   `.tif` / `.tiff` rasters to GeoServer. Each raster is published to its own
   auto-created coverage store via the `file.geotiff` REST endpoint, with the

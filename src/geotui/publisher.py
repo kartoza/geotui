@@ -17,6 +17,7 @@ from pathlib import Path
 
 from geotui.client import GeoServerClient, test_connection
 from geotui.config import Connection
+from geotui.vrt import InvalidVRTError, VRTInfo, parse_vrt
 
 logger = logging.getLogger(__name__)
 
@@ -182,10 +183,15 @@ class PublishConfig:
     """Root directory to scan for shapefiles."""
 
     format_type: str = "shapefile"
-    """Spatial format to publish: ``"shapefile"``, ``"geopackage"`` or
-    ``"geotiff"``.  Determines which discovery and upload path
+    """Spatial format to publish: ``"shapefile"``, ``"geopackage"``,
+    ``"geotiff"`` or ``"vrt"``.  Determines which discovery and upload path
     :func:`run_publish` uses.  Defaults to ``"shapefile"`` for backwards
     compatibility."""
+
+    vrt_mode: str = "bundle"
+    """How VRT source files are handled: ``"bundle"`` uploads the ``.vrt`` and
+    every file it references into the GeoServer data directory; ``"server_path"``
+    assumes the referenced data already exists on the server filesystem."""
 
     naming: NamingStrategy = NamingStrategy.BASENAME
     """Strategy for deriving layer names from shapefile stems."""
@@ -333,11 +339,15 @@ def discover_bundles(
 # ---------------------------------------------------------------------------
 
 _GEOTIFF_EXTENSIONS: frozenset[str] = frozenset({".tif", ".tiff"})
+_VRT_EXTENSIONS: frozenset[str] = frozenset({".vrt"})
 
 _FORMAT_STORE_MAP: dict[str, tuple[str, str]] = {
     "shapefile": ("Directory of spatial files (shapefiles)", "vector"),
     "geopackage": ("GeoPackage", "vector"),
     "geotiff": ("GeoTIFF", "raster"),
+    # A .vrt may be raster or vector; the kind is resolved per-file at publish
+    # time by parsing the XML, so the group is a single "mixed" category.
+    "vrt": ("VRT", "mixed"),
 }
 
 
@@ -405,6 +415,19 @@ def discover_spatial_files(
             )
         )
 
+    # --- VRT (raster or vector) --------------------------------------------
+    vrt_files = sorted(directory.glob("*.vrt"))
+    if vrt_files:
+        store_type, category = _FORMAT_STORE_MAP["vrt"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="vrt",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in vrt_files],
+            )
+        )
+
     return groups, warnings
 
 
@@ -434,6 +457,7 @@ def discover_spatial_files_from_paths(
     shp_stems: dict[str, dict[str, Path]] = {}  # stem -> {ext: path}
     gpkg_files: list[Path] = []
     tif_files: list[Path] = []
+    vrt_files: list[Path] = []
 
     for path in paths:
         if not path.is_file():
@@ -446,6 +470,8 @@ def discover_spatial_files_from_paths(
             gpkg_files.append(path)
         elif suffix in _GEOTIFF_EXTENSIONS:
             tif_files.append(path)
+        elif suffix in _VRT_EXTENSIONS:
+            vrt_files.append(path)
 
     # --- Shapefiles ---------------------------------------------------------
     shp_bundles: list[ShapefileBundle] = []
@@ -497,6 +523,18 @@ def discover_spatial_files_from_paths(
                 store_type=store_type,
                 store_category=category,
                 files=[SpatialFile.from_path(p) for p in sorted(tif_files)],
+            )
+        )
+
+    # --- VRT (raster or vector) --------------------------------------------
+    if vrt_files:
+        store_type, category = _FORMAT_STORE_MAP["vrt"]
+        groups.append(
+            SpatialFileGroup(
+                format_type="vrt",
+                store_type=store_type,
+                store_category=category,
+                files=[SpatialFile.from_path(p) for p in sorted(vrt_files)],
             )
         )
 
@@ -609,6 +647,10 @@ async def run_publish(
     # Raster (coverage) formats use a separate discovery and upload path.
     if config.format_type == "geotiff":
         return await _run_publish_rasters(conn, config, progress_callback, start)
+
+    # VRT (raster or vector, resolved per-file) uses its own path.
+    if config.format_type == "vrt":
+        return await _run_publish_vrt(conn, config, progress_callback, start)
 
     # Discover bundles.
     bundles, disc_warnings = discover_bundles(
@@ -1243,4 +1285,263 @@ async def _upload_raster(
                 f"enabled: {last_error}"
             )
 
+        return result
+
+
+# ---------------------------------------------------------------------------
+# VRT (GDAL/OGR Virtual Format) publish execution
+# ---------------------------------------------------------------------------
+
+
+def discover_vrts(directory: Path, *, recurse: bool = False) -> list[SpatialFile]:
+    """Scan *directory* for ``.vrt`` files (raster or vector).
+
+    Args:
+        directory: Root directory to scan.
+        recurse: When ``True``, descend into sub-directories.
+
+    Returns:
+        Discovered VRT files as :class:`SpatialFile` instances, sorted by path.
+    """
+    pattern = "**/*.vrt" if recurse else "*.vrt"
+    return [SpatialFile.from_path(p) for p in sorted(directory.glob(pattern))]
+
+
+def _parse_vrt_entries(
+    vrts: list[SpatialFile],
+) -> tuple[list[tuple[VRTInfo, str]], list[str]]:
+    """Parse each VRT, returning ``(info, layer_name)`` pairs and warnings."""
+    entries: list[tuple[VRTInfo, str]] = []
+    warnings: list[str] = []
+    for sf in vrts:
+        try:
+            info = parse_vrt(sf.path)
+        except InvalidVRTError as exc:
+            warnings.append(str(exc))
+            continue
+        entries.append((info, sf.name))
+    return entries, warnings
+
+
+async def _run_publish_vrt(
+    conn: Connection,
+    config: PublishConfig,
+    progress_callback: object,
+    start: float,
+) -> PublishReport:
+    """Execute a VRT publish operation (raster and/or vector).
+
+    Discovers ``.vrt`` files under *config.source_directory*, parses each to
+    determine whether it is a raster (coverage store) or vector (OGR datastore)
+    VRT, then publishes each according to *config.vrt_mode* ("bundle" uploads
+    the referenced sources via the Resource API; "server_path" points the store
+    at data already on the server).
+    """
+    vrts = discover_vrts(config.source_directory, recurse=config.recurse)
+    entries, warnings = _parse_vrt_entries(vrts)
+
+    if config.dry_run:
+        results = [
+            BundleResult(
+                layer_name=name,
+                source_path=info.path,
+                action="create",
+                status="DRY_RUN",
+            )
+            for info, name in entries
+        ]
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            username=conn.username,
+            results=results,
+            warnings=warnings,
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    conn_result = await test_connection(conn)
+    if not conn_result.success:
+        results = [
+            BundleResult(
+                layer_name=name,
+                source_path=info.path,
+                action="create",
+                status="error",
+                error=f"Connection failed: {conn_result.message}",
+            )
+            for info, name in entries
+        ]
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            username=conn.username,
+            results=results,
+            warnings=warnings,
+        )
+        report.wall_clock_seconds = time.monotonic() - start
+        return report
+
+    async with GeoServerClient(conn) as client:
+        report = PublishReport(
+            config=config,
+            geoserver_url=conn.url,
+            geoserver_version=conn_result.version,
+            username=conn.username,
+            warnings=list(warnings),
+        )
+
+        if not await _ensure_workspace(client, config, report):
+            report.wall_clock_seconds = time.monotonic() - start
+            return report
+
+        # Warn early if the server lacks the extension a VRT kind needs.
+        support = await client.get_extension_support()
+        if any(info.kind == "raster" for info, _ in entries) and not support.get(
+            "gdal"
+        ):
+            report.warnings.append(
+                "GeoServer GDAL/ImageIO-Ext coverage extension not detected; "
+                "raster VRT publishing may fail."
+            )
+        if any(info.kind == "vector" for info, _ in entries) and not support.get("ogr"):
+            report.warnings.append(
+                "GeoServer OGR datastore extension not detected; vector VRT "
+                "publishing may fail."
+            )
+
+        semaphore = asyncio.Semaphore(config.concurrency)
+        total = len(entries)
+        tasks = [
+            _publish_vrt_one(
+                client, config, info, name, semaphore, index, total, progress_callback
+            )
+            for index, (info, name) in enumerate(entries, start=1)
+        ]
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
+        for outcome in task_results:
+            if isinstance(outcome, RuntimeError):
+                break
+            if isinstance(outcome, BaseException):
+                logger.exception("Unexpected error in VRT upload task: %s", outcome)
+            else:
+                report.results.append(outcome)
+
+    report.wall_clock_seconds = time.monotonic() - start
+    return report
+
+
+async def _bundle_upload_vrt(
+    client: GeoServerClient,
+    store_name: str,
+    info: VRTInfo,
+) -> tuple[str, list[str]]:
+    """Upload a VRT and its referenced sources via the Resource API.
+
+    Files are placed under ``data/vrt/{store_name}/`` in the GeoServer data
+    directory, preserving each source's path relative to the ``.vrt`` so that
+    ``relativeToVRT`` references still resolve.
+
+    Returns:
+        A ``(data_url, warnings)`` pair where *data_url* is the ``file:`` URL
+        the store should point at.
+    """
+    base = f"data/vrt/{store_name}"
+    vrt_dir = info.path.parent
+    warnings: list[str] = []
+
+    await client.upload_resource(
+        f"{base}/{info.path.name}", info.path.read_bytes(), "application/xml"
+    )
+
+    for src in info.sources:
+        p = src.resolved
+        if not p.exists():
+            warnings.append(
+                f"Referenced source '{src.raw}' not found locally; not bundled."
+            )
+            continue
+        if not src.relative_to_vrt and p.is_absolute():
+            warnings.append(
+                f"Source '{src.raw}' uses an absolute path; the uploaded VRT "
+                f"may not resolve it in bundle mode."
+            )
+        try:
+            rel = p.relative_to(vrt_dir)
+        except ValueError:
+            rel = Path(p.name)
+        await client.upload_resource(f"{base}/{rel.as_posix()}", p.read_bytes())
+
+    return f"file:{base}/{info.path.name}", warnings
+
+
+async def _publish_vrt_one(
+    client: GeoServerClient,
+    config: PublishConfig,
+    info: VRTInfo,
+    layer_name: str,
+    semaphore: asyncio.Semaphore,
+    index: int,
+    total: int,
+    progress_callback: object,
+) -> BundleResult:
+    """Publish a single VRT (raster coverage or vector OGR datastore)."""
+    store_name = layer_name
+    async with semaphore:
+        if callable(progress_callback):
+            progress_callback(index, total, layer_name)
+
+        last_error = ""
+        try:
+            t0 = time.monotonic()
+            if config.vrt_mode == "bundle":
+                data_url, _warns = await _bundle_upload_vrt(client, store_name, info)
+            else:
+                data_url = f"file:{info.path}"
+
+            if info.kind == "raster":
+                ok = await client.create_vrt_coveragestore(
+                    config.workspace, store_name, data_url
+                )
+                if ok:
+                    await client.create_coverage(
+                        config.workspace, store_name, info.path.stem, layer_name
+                    )
+            else:  # vector
+                ok = await client.create_ogr_vrt_datastore(
+                    config.workspace, store_name, data_url
+                )
+                if ok:
+                    await client.create_featuretype(
+                        config.workspace, store_name, info.path.stem, layer_name
+                    )
+
+            if ok:
+                return BundleResult(
+                    layer_name=layer_name,
+                    source_path=info.path,
+                    action="create",
+                    status="ok",
+                    file_size=info.path.stat().st_size,
+                    upload_time=time.monotonic() - t0,
+                )
+            last_error = (
+                f"HTTP {client._last_status_code}: {client._last_response_text[:200]}"
+            )
+        except Exception as exc:
+            last_error = str(exc)
+            logger.warning("VRT publish failed for '%s': %s", layer_name, last_error)
+
+        result = BundleResult(
+            layer_name=layer_name,
+            source_path=info.path,
+            action="create",
+            status="error",
+            error=last_error,
+        )
+        if config.fail_fast:
+            raise RuntimeError(
+                f"VRT publish failed for '{layer_name}' and fail_fast is enabled: "
+                f"{last_error}"
+            )
         return result

@@ -857,6 +857,18 @@ class GeoServerTree(Widget):
         from geotui.publisher import NamingStrategy, PublishConfig, run_publish
         from geotui.report import generate_json_report, generate_pdf_report
 
+        # If any VRT is being published, ask how to handle its referenced
+        # sources (upload them, or point at data already on the server).
+        vrt_mode = "bundle"
+        if any(g.format_type == "vrt" for g in groups):
+            from geotui.screens.vrt_mode import VRTModeScreen
+
+            chosen = await self.app.push_screen_wait(VRTModeScreen())
+            if not chosen:
+                self.app.notify(_("VRT publish cancelled"), severity="warning")
+                return
+            vrt_mode = chosen
+
         total_groups = len(groups)
         progress_panel = self.query_one("#publish-progress")
         progress_bar = self.query_one("#progress-bar", ProgressBar)
@@ -871,6 +883,7 @@ class GeoServerTree(Widget):
                 datastore=store_name,
                 source_directory=source_dir,
                 format_type=group.format_type,
+                vrt_mode=vrt_mode,
                 naming=NamingStrategy.BASENAME,
                 concurrency=4,
             )
