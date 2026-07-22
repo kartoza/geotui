@@ -102,6 +102,56 @@ class TestReferencedFileExistence:
         assert len(info.missing_files) == 2
 
 
+REMOTE_VRT = """<VRTDataset rasterXSize="4" rasterYSize="4">
+  <VRTRasterBand dataType="Byte" band="1">
+    <SimpleSource>
+      <SourceFilename relativeToVRT="0">/vsis3/my-bucket/path/cog.tif</SourceFilename>
+    </SimpleSource>
+    <SimpleSource>
+      <SourceFilename relativeToVRT="0">/vsicurl/https://ex.com/a/cog.tif</SourceFilename>
+    </SimpleSource>
+    <SimpleSource>
+      <SourceFilename relativeToVRT="0">s3://bucket/key/cog.tif</SourceFilename>
+    </SimpleSource>
+  </VRTRasterBand>
+</VRTDataset>
+"""
+
+
+class TestRemoteSources:
+    def test_remote_sources_flagged(self, tmp_path: Path) -> None:
+        vrt = _write(tmp_path, "remote.vrt", REMOTE_VRT)
+        info = parse_vrt(vrt)
+        assert all(s.remote for s in info.sources)
+
+    def test_remote_urls_not_mangled(self, tmp_path: Path) -> None:
+        vrt = _write(tmp_path, "remote.vrt", REMOTE_VRT)
+        info = parse_vrt(vrt)
+        raws = [s.raw for s in info.sources]
+        # The // in the /vsicurl URL must survive verbatim.
+        assert "/vsicurl/https://ex.com/a/cog.tif" in raws
+        assert set(info.remote_sources) == set(raws)
+
+    def test_remote_sources_have_no_local_path(self, tmp_path: Path) -> None:
+        vrt = _write(tmp_path, "remote.vrt", REMOTE_VRT)
+        info = parse_vrt(vrt)
+        assert all(s.resolved is None for s in info.sources)
+
+    def test_remote_sources_not_reported_missing(self, tmp_path: Path) -> None:
+        vrt = _write(tmp_path, "remote.vrt", REMOTE_VRT)
+        info = parse_vrt(vrt)
+        assert info.missing_files == ()
+        assert info.referenced_files == ()
+
+    def test_local_absolute_path_is_not_remote(self, tmp_path: Path) -> None:
+        """A plain absolute filesystem path is local (server-path mode), not vsi."""
+        vrt = _write(
+            tmp_path, "abs.vrt", RASTER_VRT.format(abs="/data/on/server/b.tif")
+        )
+        info = parse_vrt(vrt)
+        assert not any(s.remote for s in info.sources)
+
+
 class TestSecurityAndValidation:
     def test_doctype_entity_rejected(self, tmp_path: Path) -> None:
         vrt = _write(tmp_path, "evil.vrt", DOCTYPE_VRT)

@@ -1410,6 +1410,17 @@ async def _run_publish_vrt(
                 "publishing may fail."
             )
 
+        # Note VRTs backed by remote sources (e.g. /vsis3/, /vsicurl/): the
+        # data is not uploaded; the server's GDAL must resolve it.
+        for info, name in entries:
+            if info.remote_sources:
+                report.warnings.append(
+                    f"'{name}': {len(info.remote_sources)} remote source(s) "
+                    f"(e.g. '{info.remote_sources[0]}') are read by the server's "
+                    f"GDAL — ensure the driver and credentials are configured "
+                    f"there. Nothing is uploaded for these."
+                )
+
         semaphore = asyncio.Semaphore(config.concurrency)
         total = len(entries)
         tasks = [
@@ -1455,8 +1466,12 @@ async def _bundle_upload_vrt(
     )
 
     for src in info.sources:
+        # Remote sources (vsi/URL/DB) are resolved by the server's GDAL and
+        # must not be bundled — the uploaded VRT keeps their reference verbatim.
+        if src.remote:
+            continue
         p = src.resolved
-        if not p.exists():
+        if p is None or not p.exists():
             warnings.append(
                 f"Referenced source '{src.raw}' not found locally; not bundled."
             )

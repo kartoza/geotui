@@ -42,6 +42,23 @@ _DOCTYPE_RE = re.compile(rb"<!DOCTYPE", re.IGNORECASE)
 _RASTER_ROOT = "VRTDataset"
 _VECTOR_ROOT = "OGRVRTDataSource"
 
+# GDAL virtual filesystem prefixes and URL/DB schemes that denote a source
+# resolved by the server's GDAL rather than a file GeoTUI can upload.
+_VSI_PREFIXES = ("/vsi",)
+_URL_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://")
+_OGR_DB_PREFIX_RE = re.compile(
+    r"^(PG|MYSQL|MSSQL|OCI|WFS|SDE|MongoDBv3|Elasticsearch|Carto):", re.IGNORECASE
+)
+
+
+def _is_remote(raw: str) -> bool:
+    """Return True if *raw* is a GDAL vsi path, URL, or DB connection string."""
+    if raw.startswith(_VSI_PREFIXES):
+        return True
+    if _URL_SCHEME_RE.match(raw):
+        return True
+    return bool(_OGR_DB_PREFIX_RE.match(raw))
+
 
 class InvalidVRTError(ValueError):
     """Raised when a file is not a well-formed, recognised VRT dataset."""
@@ -57,8 +74,13 @@ class VRTSource:
     relative_to_vrt: bool
     """Whether *raw* is resolved relative to the VRT's own directory."""
 
-    resolved: Path
-    """Absolute path the reference resolves to (may not exist on disk)."""
+    resolved: Path | None
+    """Absolute local path the reference resolves to (may not exist on disk),
+    or ``None`` for a remote source (vsi path / URL / DB connection)."""
+
+    remote: bool = False
+    """True if the source is resolved by the server's GDAL (e.g. ``/vsis3/``,
+    ``/vsicurl/``, ``s3://``) rather than a file GeoTUI can upload."""
 
 
 @dataclass(frozen=True)
@@ -76,16 +98,25 @@ class VRTInfo:
 
     @property
     def referenced_files(self) -> tuple[Path, ...]:
-        """Resolved absolute paths of all referenced sources (deduplicated)."""
+        """Resolved local paths of referenced sources (deduplicated).
+
+        Remote sources (vsi/URL/DB) are excluded — they have no local path.
+        """
         seen: dict[Path, None] = {}
         for src in self.sources:
-            seen.setdefault(src.resolved, None)
+            if src.resolved is not None:
+                seen.setdefault(src.resolved, None)
         return tuple(seen)
 
     @property
     def missing_files(self) -> tuple[Path, ...]:
-        """Referenced files that do not exist on the local filesystem."""
+        """Local referenced files that do not exist on the local filesystem."""
         return tuple(p for p in self.referenced_files if not p.exists())
+
+    @property
+    def remote_sources(self) -> tuple[str, ...]:
+        """Raw references that are resolved by the server's GDAL (vsi/URL/DB)."""
+        return tuple(src.raw for src in self.sources if src.remote)
 
 
 def is_vrt(path: Path) -> bool:
@@ -176,11 +207,17 @@ def _collect_sources(
         if not raw:
             continue
         rel = _attr_true(elem, "relativeToVRT")
-        sources.append(
-            VRTSource(
-                raw=raw,
-                relative_to_vrt=rel,
-                resolved=_resolve(raw, rel, vrt_dir),
+        if _is_remote(raw):
+            sources.append(
+                VRTSource(raw=raw, relative_to_vrt=rel, resolved=None, remote=True)
             )
-        )
+        else:
+            sources.append(
+                VRTSource(
+                    raw=raw,
+                    relative_to_vrt=rel,
+                    resolved=_resolve(raw, rel, vrt_dir),
+                    remote=False,
+                )
+            )
     return tuple(sources)
