@@ -250,7 +250,7 @@ graph TB
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.2.0 | 2026-07-22 | GeoTIFF publishing wired into F5 pipeline (per-file coverage stores) |
+| 1.2.0 | 2026-07-23 | GeoTIFF & VRT (GDAL/OGR) publishing via F5; precise file selection (cursor/Space); vault unlock-loop and edit-form UX fixes |
 | 0.6.0 | 2026-05-21 | Multi-connection tree, lazy loading, connection states |
 | 0.5.0 | 2026-05-21 | F5 copy-to-publish, multi-format support, replaces F2 bulk publish |
 | 0.4.0 | 2026-05-20 | Bulk shapefile publisher, PDF/JSON reports, CLI interface |
