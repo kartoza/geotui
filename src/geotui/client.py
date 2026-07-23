@@ -96,6 +96,15 @@ class StoreType:
     fields: list[tuple[str, str, str]]
 
 
+# ── VRT GeoServer type strings ─────────────────────────────
+# These are the store type / driver identifiers GeoServer expects for VRT.
+# Kept as module constants because the exact strings depend on the installed
+# GDAL / OGR extensions and may need tuning per deployment.
+VRT_COVERAGE_TYPE = "VRT"
+OGR_DATASTORE_TYPE = "OGR"
+OGR_VRT_DRIVER = "VRT"
+
+
 # ── Store type registry ────────────────────────────────────
 
 STORE_TYPES: list[StoreType] = [
@@ -830,6 +839,113 @@ class GeoServerClient:
             path += "&update=overwrite"
         status = await self._put(path, data, "image/tiff")
         return status in (200, 201)
+
+    # ── VRT (GDAL/OGR Virtual Format) support ──────────────
+
+    async def get_extension_support(self) -> dict[str, bool]:
+        """Detect optional GeoServer extensions relevant to VRT publishing.
+
+        Queries the server manifest and looks for the jars that provide GDAL
+        coverage support (raster VRT) and the OGR datastore (vector VRT).
+
+        Returns:
+            Mapping with boolean ``"gdal"`` and ``"ogr"`` keys. Values are
+            best-effort; ``False`` means "not detected", not a hard guarantee
+            the extension is absent.
+        """
+        data = await self._get("/rest/about/manifest.json")
+        names: list[str] = []
+        if data:
+            resources = data.get("about", {}).get("resource", [])
+            names = [str(r.get("@name", "")) for r in resources]
+        joined = " ".join(names).lower()
+        return {
+            "gdal": "gdal" in joined or "imageio-ext" in joined,
+            "ogr": "gt-ogr" in joined or "ogr-bridj" in joined or "ogr-jni" in joined,
+        }
+
+    async def upload_resource(
+        self,
+        resource_path: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+    ) -> bool:
+        """Upload a file into the GeoServer data directory via the Resource API.
+
+        Used for VRT *bundle* mode: the ``.vrt`` and every file it references
+        are pushed into the data directory over REST (no server filesystem
+        access required), after which a store can point at them.
+
+        Args:
+            resource_path: Path relative to the data directory root, e.g.
+                ``"data/vrt/mystore/mosaic.vrt"``. Leading slashes are stripped.
+            data: Raw file bytes.
+            content_type: MIME type for the upload.
+
+        Returns:
+            True if the resource was stored (HTTP 200 or 201).
+        """
+        clean = resource_path.lstrip("/")
+        status = await self._put(f"/rest/resource/{clean}", data, content_type)
+        return status in (200, 201)
+
+    async def create_vrt_coveragestore(
+        self, workspace: str, name: str, url: str
+    ) -> bool:
+        """Create a raster VRT coverage store pointing at *url*.
+
+        Requires the GDAL/ImageIO-Ext coverage extension on the server.
+
+        Args:
+            workspace: Target workspace.
+            name: Coverage store name.
+            url: ``file:`` URL to the ``.vrt`` (relative to the data dir or
+                absolute on the server).
+
+        Returns:
+            True if created (HTTP 200/201).
+        """
+        return await self.create_coveragestore(workspace, name, VRT_COVERAGE_TYPE, url)
+
+    async def create_coverage(
+        self, workspace: str, store: str, native_name: str, layer_name: str
+    ) -> bool:
+        """Configure a coverage (layer) within a coverage store.
+
+        Args:
+            workspace: Target workspace.
+            store: Coverage store name.
+            native_name: Native coverage name as read from the source.
+            layer_name: Desired published layer name.
+
+        Returns:
+            True if created (HTTP 201) or already present.
+        """
+        path = f"/rest/workspaces/{workspace}/coveragestores/{store}/coverages"
+        payload = {"coverage": {"name": layer_name, "nativeName": native_name}}
+        return await self._post(path, payload)
+
+    async def create_ogr_vrt_datastore(
+        self, workspace: str, name: str, datasource: str
+    ) -> bool:
+        """Create a vector OGR datastore backed by a VRT datasource.
+
+        Requires the OGR datastore extension on the server.
+
+        Args:
+            workspace: Target workspace.
+            name: Datastore name.
+            datasource: ``file:`` URL / path to the ``.vrt`` datasource.
+
+        Returns:
+            True if created (HTTP 200/201).
+        """
+        params = {
+            "DatasourceName": datasource,
+            "DriverName": OGR_VRT_DRIVER,
+            "namespace": workspace,
+        }
+        return await self.create_datastore(workspace, name, OGR_DATASTORE_TYPE, params)
 
     async def recalculate_bbox(self, workspace: str, layer_name: str) -> bool:
         """Recalculate bounding box for a layer.

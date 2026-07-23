@@ -28,6 +28,9 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      # Don't cancel the whole matrix when one combo fails, so every
+      # OS/Python job reports its real status for diagnostics.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]

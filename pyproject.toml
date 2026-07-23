@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "geotui"
-version = "1.1.0"
+version = "1.2.0"
 description = "A beautiful Midnight Commander-style TUI for GeoServer management"
 readme = "README.md"
 license = "MIT"
@@ -38,6 +38,7 @@ dependencies = [
     "keyring>=25.0.0",
     "fpdf2>=2.8.0",
     "click>=8.0.0",
+    "defusedxml>=0.7.0",
 ]
 
 [project.optional-dependencies]

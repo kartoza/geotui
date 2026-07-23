@@ -6,7 +6,7 @@ on the right. No popups - all CRUD happens inline following the cloudbench patte
 
 from cryptography.fernet import Fernet
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import (
@@ -143,6 +143,14 @@ class SettingsScreen(Screen[None]):
         margin: 0 0 0 2;
     }
 
+    SettingsScreen #conn-status {
+        width: 100%;
+        height: auto;
+        margin: 1 0 0 0;
+        text-align: center;
+        text-style: bold;
+    }
+
     SettingsScreen Input {
         margin: 0 0 0 0;
         width: 100%;
@@ -161,6 +169,37 @@ class SettingsScreen(Screen[None]):
 
     SettingsScreen #form-buttons Button {
         margin: 0 1;
+    }
+
+    /* Edit form: fields scroll, action bar stays pinned and always visible. */
+    SettingsScreen #edit-mode {
+        height: 1fr;
+        layout: vertical;
+    }
+
+    SettingsScreen #edit-fields {
+        height: 1fr;
+        overflow-y: auto;
+    }
+
+    SettingsScreen .action-bar {
+        height: auto;
+        width: 100%;
+        padding: 1 0 0 0;
+        align: center middle;
+        background: #1a1a2e;
+        border-top: solid #0f3460;
+    }
+
+    SettingsScreen .action-bar Button {
+        margin: 0 1;
+    }
+
+    SettingsScreen #vault-label {
+        color: #8A8B8B;
+        margin: 0 1 0 0;
+        content-align: left middle;
+        height: 100%;
     }
 
     SettingsScreen .btn-primary {
@@ -251,33 +290,43 @@ class SettingsScreen(Screen[None]):
                     yield Static("", id="view-username", classes="field-value")
                     yield Label(_("Password"), classes="field-label")
                     yield Static("", id="view-password", classes="field-value-password")
+                    yield Static("", id="conn-status")
                     with Horizontal(id="form-buttons"):
                         yield Button(_("Edit"), id="btn-edit", classes="btn-primary")
                         yield Button(
                             _("Connect"), id="btn-connect", classes="btn-success"
                         )
                 with Vertical(id="edit-mode"):
-                    yield Label(_("Name"), classes="field-label")
-                    yield Input(placeholder=_("Connection name"), id="input-name")
-                    yield Label(_("URL"), classes="field-label")
-                    yield Input(
-                        placeholder="https://geoserver.example.com/geoserver",
-                        id="input-url",
-                    )
-                    yield Label(_("Username"), classes="field-label")
-                    yield Input(placeholder=_("Username"), id="input-username")
-                    yield Label(_("Password"), classes="field-label")
-                    yield Input(
-                        placeholder=_("Password"), id="input-password", password=True
-                    )
-                    with Horizontal(id="form-buttons"):
+                    with VerticalScroll(id="edit-fields"):
+                        yield Label(_("Name"), classes="field-label")
+                        yield Input(placeholder=_("Connection name"), id="input-name")
+                        yield Label(_("URL"), classes="field-label")
+                        yield Input(
+                            placeholder="https://geoserver.example.com/geoserver",
+                            id="input-url",
+                        )
+                        yield Label(_("Username"), classes="field-label")
+                        yield Input(placeholder=_("Username"), id="input-username")
+                        yield Label(_("Password"), classes="field-label")
+                        yield Input(
+                            placeholder=_("Password"),
+                            id="input-password",
+                            password=True,
+                        )
+                    with Horizontal(id="edit-buttons", classes="action-bar"):
                         yield Button(_("Save"), id="btn-save", classes="btn-success")
+                        yield Button(
+                            _("Save & Connect"),
+                            id="btn-save-connect",
+                            classes="btn-primary",
+                        )
                         yield Button(
                             _("Cancel"), id="btn-cancel", classes="btn-default"
                         )
         with Horizontal(id="vault-buttons"):
+            yield Label(_("Master vault:"), id="vault-label")
             yield Button(
-                _("Change Password"),
+                _("Change Master Password"),
                 id="btn-change-pw",
                 classes="btn-primary",
             )
@@ -319,6 +368,10 @@ class SettingsScreen(Screen[None]):
         edit.display = mode == "edit"
         self.editing = mode == "edit"
 
+        # Hide the master-vault controls while editing a connection so they
+        # cannot be mistaken for the form's Save/Cancel actions.
+        self.query_one("#vault-buttons").display = mode != "edit"
+
     def _get_vault_key(self) -> Fernet | None:
         """Get the vault Fernet key from the app."""
         from geotui.app import GeoTUIApp
@@ -357,7 +410,25 @@ class SettingsScreen(Screen[None]):
         pw = self._decrypt_password(conn.password)
         masked = "*" * len(pw) if pw else "(not set)"
         self.query_one("#view-password", Static).update(masked)
+        # Reflect any previously-established connection state.
+        if conn.is_active:
+            self._show_connection_status(_("✓ Connected"), "#06969A")
+        else:
+            self._show_connection_status("", "#8A8B8B")
         self._show_mode("view")
+
+    def _show_connection_status(self, text: str, color: str) -> None:
+        """Update the connection status line in the detail panel.
+
+        Args:
+            text: Status text to display (empty to clear).
+            color: Hex colour for the status text.
+        """
+        try:
+            status = self.query_one("#conn-status", Static)
+        except Exception:
+            return
+        status.update(f"[b {color}]{text}[/]" if text else "")
 
     def _populate_edit_form(self, conn: Connection | None = None) -> None:
         """Populate the edit form with connection data.
@@ -396,6 +467,9 @@ class SettingsScreen(Screen[None]):
             self.action_test_connection()
         elif button_id == "btn-save":
             self._save_form()
+        elif button_id == "btn-save-connect":
+            if self._save_form():
+                self.action_test_connection()
         elif button_id == "btn-cancel":
             self._cancel_edit()
         elif button_id == "btn-change-pw":
@@ -460,11 +534,18 @@ class SettingsScreen(Screen[None]):
             test_conn = self._config.decrypt_connection(conn, fernet)
         result = await test_connection(test_conn)
         if result.success:
-            self.notify(result.message, severity="information")
+            self.notify(
+                _("{name} — {message}").format(name=conn.name, message=result.message),
+                title=_("✓ Connected"),
+                severity="information",
+                timeout=6,
+            )
             # Mark this connection as active, deactivate others
             for c in self._config.config.connections:
                 c.is_active = c.id == conn.id
             self._config.save()
+            # Reflect the connected state in the detail panel.
+            self._show_connection_status(_("✓ Connected"), "#06969A")
             # Refresh the tree to pick up the new connection state
             from geotui.widgets.geoserver_tree import GeoServerTree
 
@@ -474,7 +555,13 @@ class SettingsScreen(Screen[None]):
             except Exception:
                 self.log.warning("Could not update GeoServer tree")
         else:
-            self.notify(result.message, severity="error")
+            self.notify(
+                result.message,
+                title=_("✗ Connection failed"),
+                severity="error",
+                timeout=8,
+            )
+            self._show_connection_status(_("✗ Connection failed"), "#CC0403")
 
     def _encrypt_password(self, plaintext: str) -> str:
         """Encrypt a password for storage using the vault key.
@@ -490,8 +577,13 @@ class SettingsScreen(Screen[None]):
             return self._config.encrypt_password(plaintext, fernet)
         return plaintext
 
-    def _save_form(self) -> None:
-        """Save the current form data."""
+    def _save_form(self) -> bool:
+        """Save the current form data.
+
+        Returns:
+            ``True`` if the connection was saved, ``False`` if validation
+            failed or the vault was locked (nothing was persisted).
+        """
         name = self.query_one("#input-name", Input).value.strip()
         url = self.query_one("#input-url", Input).value.strip()
         username = self.query_one("#input-username", Input).value.strip()
@@ -500,12 +592,22 @@ class SettingsScreen(Screen[None]):
         if not name:
             self.notify(_("Name is required"), severity="error")
             self.query_one("#input-name", Input).focus()
-            return
+            return False
 
         if not url:
             self.notify(_("URL is required"), severity="error")
             self.query_one("#input-url", Input).focus()
-            return
+            return False
+
+        # Refuse to save while the vault is locked: doing so would store the
+        # password in plaintext (a leak) or double-encrypt an existing token
+        # (which later fails to decrypt). Prompt the user to unlock first.
+        if self._config.has_vault and self._get_vault_key() is None:
+            self.notify(
+                _("Vault is locked. Unlock it before saving credentials."),
+                severity="error",
+            )
+            return False
 
         # Encrypt the password before storing
         encrypted_pw = self._encrypt_password(password)
@@ -518,19 +620,20 @@ class SettingsScreen(Screen[None]):
                 username=username,
                 password=encrypted_pw,
             )
-            self.notify(f"{name} updated", severity="information")
+            self.notify(_("{name} saved").format(name=name), severity="information")
         else:
             conn = Connection(
                 name=name, url=url, username=username, password=encrypted_pw
             )
             self._config.add_connection(conn)
             self.selected_id = conn.id
-            self.notify(f"{name} added", severity="information")
+            self.notify(_("{name} saved").format(name=name), severity="information")
 
         self._refresh_list()
         saved_conn = self._config.get_connection(self.selected_id)
         if saved_conn:
             self._show_connection_detail(saved_conn)
+        return True
 
     def _cancel_edit(self) -> None:
         """Cancel editing and return to view or empty mode."""

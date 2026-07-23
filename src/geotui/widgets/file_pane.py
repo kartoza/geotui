@@ -10,6 +10,7 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widget import Widget
 from textual.widgets import DirectoryTree, Label, Static
@@ -53,6 +54,15 @@ def is_shapefile_component(path: Path) -> bool:
 
 class MCDirectoryTree(DirectoryTree):
     """DirectoryTree with '..' parent directory entry like Midnight Commander."""
+
+    class SelectionChanged(Message):
+        """Posted when the tagged-file selection changes."""
+
+    BINDINGS = [
+        Binding("space", "tag_cursor", _("Select"), show=False),
+        Binding("right", "expand_cursor", _("Expand"), show=False),
+        Binding("left", "collapse_cursor", _("Collapse"), show=False),
+    ]
 
     def __init__(
         self,
@@ -108,6 +118,36 @@ class MCDirectoryTree(DirectoryTree):
         else:
             self._selected_paths.add(path)
         self.refresh()
+
+    def action_tag_cursor(self) -> None:
+        """Space handler: toggle selection on the cursor file, then move down.
+
+        Overrides the tree's default space (expand/collapse) so Space tags
+        files for a non-contiguous multi-file publish, MC-style.
+        """
+        self.toggle_select_cursor()
+        self.action_cursor_down()
+        self.post_message(self.SelectionChanged())
+
+    def action_expand_cursor(self) -> None:
+        """Right arrow: expand the folder under the cursor in place."""
+        node = self.cursor_node
+        if node is not None and node.allow_expand and not node.is_expanded:
+            node.expand()
+
+    def action_collapse_cursor(self) -> None:
+        """Left arrow: collapse the folder under the cursor.
+
+        If the node is already collapsed (or a file), move the cursor to its
+        parent folder — the familiar file-manager "out" motion.
+        """
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.allow_expand and node.is_expanded:
+            node.collapse()
+        elif node.parent is not None and node.parent is not self.root:
+            self.move_cursor(node.parent)
 
     def clear_selection(self) -> None:
         """Clear all selected files."""
@@ -232,6 +272,22 @@ class FilePane(Widget):
             return node_path.parent
         return Path(self.current_path)
 
+    def get_cursor_target(self) -> Path | None:
+        """Return the path of the item under the cursor (file or directory).
+
+        Excludes the ".." parent entry. Returns ``None`` when there is no
+        usable cursor node. Unlike :meth:`get_selected_path`, a file returns
+        the file itself (not its parent), so F5 can publish just that dataset.
+        """
+        tree = self.query_one(MCDirectoryTree)
+        if not (tree.cursor_node and tree.cursor_node.data):
+            return None
+        path = tree.cursor_node.data.path
+        # Exclude the ".." parent-navigation entry.
+        if path == Path(self.current_path).parent:
+            return None
+        return path
+
     def get_selected_files(self) -> list[Path]:
         """Get files selected via Ctrl+T, with smart shapefile companion detection.
 
@@ -262,6 +318,13 @@ class FilePane(Widget):
         tree.toggle_select_cursor()
         # Move cursor down like MC does after tagging
         tree.action_cursor_down()
+        self._update_footer()
+
+    def on_mc_directory_tree_selection_changed(
+        self, event: MCDirectoryTree.SelectionChanged
+    ) -> None:
+        """Refresh the footer count when Space toggles a selection."""
+        event.stop()
         self._update_footer()
 
     def navigate_to(self, path: Path) -> None:
