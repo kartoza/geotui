@@ -87,16 +87,15 @@ class TestParseVectorVRT:
 class TestReferencedFileExistence:
     def test_missing_source_still_enumerated(self, tmp_path: Path) -> None:
         """Server-path mode needs the declared path even if not present locally."""
-        vrt = _write(
-            tmp_path, "mosaic.vrt", RASTER_VRT.format(abs="/data/on/server/b.tif")
-        )
+        # Use an OS-absolute path that does not exist (portable across Windows).
+        server_path = tmp_path / "server" / "b.tif"
+        vrt = _write(tmp_path, "mosaic.vrt", RASTER_VRT.format(abs=str(server_path)))
         info = parse_vrt(vrt)
-        assert Path("/data/on/server/b.tif") in set(info.referenced_files)
+        assert server_path.resolve() in set(info.referenced_files)
 
     def test_missing_files_reported(self, tmp_path: Path) -> None:
-        vrt = _write(
-            tmp_path, "mosaic.vrt", RASTER_VRT.format(abs="/data/on/server/b.tif")
-        )
+        server_path = tmp_path / "server" / "b.tif"
+        vrt = _write(tmp_path, "mosaic.vrt", RASTER_VRT.format(abs=str(server_path)))
         info = parse_vrt(vrt)
         # tiles/a.tif and the absolute path are both absent locally
         assert len(info.missing_files) == 2
@@ -145,9 +144,8 @@ class TestRemoteSources:
 
     def test_local_absolute_path_is_not_remote(self, tmp_path: Path) -> None:
         """A plain absolute filesystem path is local (server-path mode), not vsi."""
-        vrt = _write(
-            tmp_path, "abs.vrt", RASTER_VRT.format(abs="/data/on/server/b.tif")
-        )
+        server_path = tmp_path / "server" / "b.tif"
+        vrt = _write(tmp_path, "abs.vrt", RASTER_VRT.format(abs=str(server_path)))
         info = parse_vrt(vrt)
         assert not any(s.remote for s in info.sources)
 

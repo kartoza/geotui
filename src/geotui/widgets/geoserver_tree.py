@@ -872,7 +872,12 @@ class GeoServerTree(Widget):
             groups: Discovered spatial file groups.
             warnings: Discovery warnings.
         """
-        from geotui.publisher import NamingStrategy, PublishConfig, run_publish
+        from geotui.publisher import (
+            NamingStrategy,
+            PublishConfig,
+            ShapefileBundle,
+            run_publish,
+        )
         from geotui.report import generate_json_report, generate_pdf_report
 
         # If any VRT is being published, ask how to handle its referenced
@@ -901,9 +906,8 @@ class GeoServerTree(Widget):
             # uploads only those datasets.
             group_files: list[Path] = []
             for f in group.files:
-                bundle_files = getattr(f, "files", None)
-                if bundle_files is not None:  # ShapefileBundle
-                    group_files.extend(bundle_files)
+                if isinstance(f, ShapefileBundle):
+                    group_files.extend(f.files)
                 else:  # SpatialFile
                     group_files.append(f.path)
 

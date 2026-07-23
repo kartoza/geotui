@@ -23,9 +23,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from xml.etree import ElementTree as ET
+from xml.etree import ElementTree as ET  # nosec B405  # types/ParseError only
 
-import defusedxml.ElementTree as SafeET
+import defusedxml.ElementTree as SafeET  # all parsing goes through defusedxml
 
 __all__ = [
     "InvalidVRTError",
